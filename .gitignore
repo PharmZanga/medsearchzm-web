@@ -30,6 +30,7 @@ _ide_helper_models.php
 Thumbs.db
 
 # Build assets
+/dist/
 /public/css/
 /public/js/
 /public/mix-manifest.json
