@@ -24,7 +24,8 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 
@@ -310,8 +311,27 @@ const modules = [
   { id: 'accounts' as ModuleId, title: 'Accounts', icon: Building2, color: 'bg-orange-500' },
 ];
 
+const moduleLabels: Record<ModuleId, string> = {
+  home: 'Home',
+  pharmacy: 'Pharmacies',
+  hospitals: 'Hospitals',
+  services: 'Medical Services',
+  medicines: 'Medications',
+  community: 'Community',
+  'medical-profile': 'My Medical Profile',
+  accounts: 'Accounts',
+};
+
+function moduleFromHash(): ModuleId {
+  if (typeof window === 'undefined') return 'home';
+  const hashModule = window.location.hash.replace(/^#\/?/, '') as ModuleId;
+  return ['pharmacy', 'hospitals', 'services', 'medicines', 'community', 'medical-profile', 'accounts'].includes(hashModule)
+    ? hashModule
+    : 'home';
+}
+
 function App() {
-  const [activeModule, setActiveModule] = useState<ModuleId>('home');
+  const [activeModule, setActiveModule] = useState<ModuleId>(() => moduleFromHash());
   const [query, setQuery] = useState('');
   const [accountType, setAccountType] = useState<AccountType>('patient');
   const [loggedInAccount, setLoggedInAccount] = useState<AccountType | null>(null);
@@ -344,6 +364,10 @@ function App() {
   }, [query]);
 
   function navigate(module: ModuleId) {
+    if (typeof window !== 'undefined') {
+      const nextUrl = module === 'home' ? window.location.pathname : `${window.location.pathname}#/${module}`;
+      window.history.pushState({}, '', nextUrl);
+    }
     setActiveModule(module);
     setToast(`Opened ${module === 'home' ? 'home' : module.replace('-', ' ')}`);
   }
@@ -374,68 +398,118 @@ function App() {
     return sum + (medicine?.price ?? 0) * item.quantity;
   }, 0);
 
+  useEffect(() => {
+    function handleRouteChange() {
+      setActiveModule(moduleFromHash());
+    }
+
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('hashchange', handleRouteChange);
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('hashchange', handleRouteChange);
+    };
+  }, []);
+
+  function currentModuleScreen() {
+    if (activeModule === 'pharmacy') {
+      return (
+        <PharmacyModule
+          facilities={filteredFacilities.filter((facility) => facility.type === 'Pharmacy')}
+          selectedFacility={selectedFacility}
+          onSelectFacility={setSelectedFacilityId}
+          onAddToCart={addToCart}
+        />
+      );
+    }
+
+    if (activeModule === 'hospitals') {
+      return (
+        <HospitalsModule
+          facilities={filteredFacilities.filter((facility) => facility.type !== 'Pharmacy')}
+          selectedFacility={selectedFacility}
+          onSelectFacility={setSelectedFacilityId}
+        />
+      );
+    }
+
+    if (activeModule === 'services') {
+      return (
+        <Services
+          selectedService={selectedService}
+          onSelectService={setSelectedService}
+          onSelectFacility={setSelectedFacilityId}
+          onNavigate={navigate}
+        />
+      );
+    }
+
+    if (activeModule === 'medicines') {
+      return (
+        <Medicines
+          medicines={filteredMedicines}
+          selectedMedicine={selectedMedicine}
+          onSelectMedicine={setSelectedMedicineId}
+          onAddToCart={addToCart}
+          onNavigate={navigate}
+        />
+      );
+    }
+
+    if (activeModule === 'community') {
+      return <Community activeTab={communityTab} onTabChange={setCommunityTab} />;
+    }
+
+    if (activeModule === 'medical-profile') {
+      return <MedicalProfile />;
+    }
+
+    if (activeModule === 'accounts') {
+      return (
+        <Accounts
+          accountType={accountType}
+          loggedInAccount={loggedInAccount}
+          onAccountTypeChange={setAccountType}
+          onLogin={(type) => {
+            setAccountType(type);
+            setLoggedInAccount(type);
+            setToast(`Logged in as ${type.replace('_', ' ')}`);
+          }}
+        />
+      );
+    }
+
+    return null;
+  }
+
   return (
     <main className="min-h-screen bg-[#F6FBFB]">
       <SiteHeader activeModule={activeModule} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} onNavigate={navigate} />
-      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
-        <div>
-          <Hero onNavigate={navigate} />
-          <SearchPanel query={query} onQueryChange={setQuery} />
-          {activeModule === 'home' && <HomeModules onNavigate={navigate} />}
-          {activeModule === 'pharmacy' && (
-            <PharmacyModule
-              facilities={filteredFacilities.filter((facility) => facility.type === 'Pharmacy')}
-              selectedFacility={selectedFacility}
-              onSelectFacility={setSelectedFacilityId}
-              onAddToCart={addToCart}
-            />
-          )}
-          {activeModule === 'hospitals' && (
-            <HospitalsModule
-              facilities={filteredFacilities.filter((facility) => facility.type !== 'Pharmacy')}
-              selectedFacility={selectedFacility}
-              onSelectFacility={setSelectedFacilityId}
-            />
-          )}
-          {activeModule === 'services' && (
-            <Services
-              selectedService={selectedService}
-              onSelectService={setSelectedService}
-              onSelectFacility={setSelectedFacilityId}
-              onNavigate={navigate}
-            />
-          )}
-          {activeModule === 'medicines' && (
-            <Medicines
-              medicines={filteredMedicines}
-              selectedMedicine={selectedMedicine}
-              onSelectMedicine={setSelectedMedicineId}
-              onAddToCart={addToCart}
-              onNavigate={navigate}
-            />
-          )}
-          {activeModule === 'community' && <Community activeTab={communityTab} onTabChange={setCommunityTab} />}
-          {activeModule === 'medical-profile' && <MedicalProfile />}
-          {activeModule === 'accounts' && (
-            <Accounts
-              accountType={accountType}
-              loggedInAccount={loggedInAccount}
-              onAccountTypeChange={setAccountType}
-              onLogin={(type) => {
-                setAccountType(type);
-                setLoggedInAccount(type);
-                setToast(`Logged in as ${type.replace('_', ' ')}`);
-              }}
-            />
-          )}
-        </div>
-        <aside className="space-y-5">
-          <QuickActions onNavigate={navigate} />
-          <CarolineCard onNavigate={navigate} selectedMedicine={selectedMedicine} selectedFacility={selectedFacility} />
-          <CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} />
-          <OrdersSnapshot toast={toast} />
-        </aside>
-      </section>
+      {activeModule === 'home' ? (
+        <section className="mx-auto grid max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
+          <div className="space-y-5">
+            <Hero onNavigate={navigate} />
+            <SearchPanel query={query} onQueryChange={setQuery} />
+            <HomeModules onNavigate={navigate} />
+          </div>
+          <aside className="space-y-5">
+            <QuickActions onNavigate={navigate} />
+            <CarolineCard onNavigate={navigate} selectedMedicine={selectedMedicine} selectedFacility={selectedFacility} />
+            <CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} />
+            <OrdersSnapshot toast={toast} />
+          </aside>
+        </section>
+      ) : (
+        <AppPage
+          activeModule={activeModule}
+          cart={<CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} />}
+          onBack={() => navigate('home')}
+          query={query}
+          onQueryChange={setQuery}
+        >
+          {currentModuleScreen()}
+        </AppPage>
+      )}
     </main>
   );
 }
@@ -479,6 +553,57 @@ function SiteHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+function AppPage({
+  activeModule,
+  cart,
+  children,
+  onBack,
+  query,
+  onQueryChange,
+}: {
+  activeModule: ModuleId;
+  cart: ReactNode;
+  children: ReactNode;
+  onBack: () => void;
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  const showCart = activeModule === 'pharmacy' || activeModule === 'medicines';
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
+      <div className="mb-6 rounded-[28px] border border-teal-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <button
+              className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#EAF8F8] px-4 py-2 text-sm font-black text-[#087D7D]"
+              onClick={onBack}
+            >
+              <ChevronRight className="rotate-180" size={16} />
+              Back to home
+            </button>
+            <p className="text-sm font-black uppercase tracking-wide text-[#087D7D]">MedSearch page</p>
+            <h1 className="mt-1 text-3xl font-black text-slate-950">{moduleLabels[activeModule]}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              This module now opens as its own web page, matching the app flow instead of stacking everything on the home screen.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#FF8A00] px-4 py-2 text-sm font-black text-white">
+            {activeModule === 'accounts' ? 'Demo login enabled' : 'App-style page'}
+          </span>
+        </div>
+        <div className="mt-5">
+          <SearchPanel query={query} onQueryChange={onQueryChange} />
+        </div>
+      </div>
+      <div className={showCart ? 'grid gap-8 lg:grid-cols-[1fr_360px]' : ''}>
+        <div>{children}</div>
+        {showCart && <aside className="space-y-5">{cart}</aside>}
+      </div>
+    </section>
   );
 }
 
