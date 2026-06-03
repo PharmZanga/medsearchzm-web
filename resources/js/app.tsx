@@ -287,8 +287,19 @@ const accounts = [
     title: 'Patient / Public User',
     icon: UserRound,
     summary: 'Search, book, buy OTC medicines, save providers and receive notifications.',
-    fields: ['Full name', 'NRC or passport', 'Phone OTP', 'Date of birth', 'Gender'],
-    permissions: ['Comment', 'Like', 'Share', 'Save providers'],
+    fields: ['Full name', 'NRC or passport', 'Phone OTP', 'Date of birth', 'Gender', 'PIN or biometric login'],
+    permissions: [
+      'Search hospitals',
+      'Search pharmacies',
+      'Search doctors',
+      'Search medicines',
+      'Buy OTC medicines',
+      'Book appointments',
+      'Use telemedicine',
+      'Comment in community',
+      'Save favorite providers',
+      'Receive notifications',
+    ],
   },
   {
     id: 'health_worker' as AccountType,
@@ -345,6 +356,7 @@ function App() {
   const [selectedFacilityId, setSelectedFacilityId] = useState('fine');
   const [selectedMedicineId, setSelectedMedicineId] = useState('paracetamol');
   const [selectedService, setSelectedService] = useState('Appointment Booking');
+  const [pharmacyFilter, setPharmacyFilter] = useState('All');
   const [communityTab, setCommunityTab] = useState('Feed');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toast, setToast] = useState('Ready');
@@ -384,6 +396,23 @@ function App() {
   function openAction(panel: ActionPanelContent) {
     setActionPanel(panel);
     setToast(panel.title);
+  }
+
+  function openFacilityWindow(facility: Facility) {
+    setSelectedFacilityId(facility.id);
+    const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(facility.id));
+    openAction({
+      title: `${facility.name} profile`,
+      subtitle: `${facility.type} · ${facility.distance} away · ${facility.status} · ${facility.rating}/5 rating`,
+      items: [
+        `Quick actions: Call, Chat, WhatsApp, Directions, Share`,
+        `Services Offered: ${facility.services.join(', ')}`,
+        `Medicines In Stock: ${inventory.length ? inventory.map((medicine) => medicine.name).join(', ') : 'Service catalogue available'}`,
+        `Delivery Services: ${facility.delivery ? 'Delivery available with order tracking' : 'Delivery not currently available'}`,
+        `Map and Navigation: live route from current location to ${facility.name}`,
+      ],
+      primaryAction: 'Open full profile',
+    });
   }
 
   function addToCart(medicineId: string) {
@@ -431,7 +460,10 @@ function App() {
         <PharmacyModule
           facilities={filteredFacilities.filter((facility) => facility.type === 'Pharmacy')}
           selectedFacility={selectedFacility}
+          pharmacyFilter={pharmacyFilter}
           onSelectFacility={setSelectedFacilityId}
+          onPharmacyFilterChange={setPharmacyFilter}
+          onOpenFacility={openFacilityWindow}
           onAddToCart={addToCart}
           onOpenAction={openAction}
         />
@@ -444,6 +476,7 @@ function App() {
           facilities={filteredFacilities.filter((facility) => facility.type !== 'Pharmacy')}
           selectedFacility={selectedFacility}
           onSelectFacility={setSelectedFacilityId}
+          onOpenFacility={openFacilityWindow}
           onOpenAction={openAction}
         />
       );
@@ -493,6 +526,7 @@ function App() {
             setLoggedInAccount(type);
             setToast(`Logged in as ${type.replace('_', ' ')}`);
           }}
+          onNavigate={navigate}
           onOpenAction={openAction}
         />
       );
@@ -706,24 +740,54 @@ function HomeModules({ onNavigate }: { onNavigate: (module: ModuleId) => void })
 function PharmacyModule({
   facilities,
   selectedFacility,
+  pharmacyFilter,
   onSelectFacility,
+  onPharmacyFilterChange,
+  onOpenFacility,
   onAddToCart,
   onOpenAction,
 }: {
   facilities: Facility[];
   selectedFacility: Facility;
+  pharmacyFilter: string;
   onSelectFacility: (id: string) => void;
+  onPharmacyFilterChange: (filter: string) => void;
+  onOpenFacility: (facility: Facility) => void;
   onAddToCart: (medicineId: string) => void;
   onOpenAction: (panel: ActionPanelContent) => void;
 }) {
-  const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(selectedFacility.id));
+  const activeFacility = facilities.find((facility) => facility.id === selectedFacility.id) ?? facilities[0] ?? selectedFacility;
+  const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(activeFacility.id));
+  const filteredPharmacies = facilities
+    .filter((facility) =>
+      pharmacyFilter === 'All'
+      || (pharmacyFilter === 'Verified' && facility.verified)
+      || (pharmacyFilter === 'Open Now' && facility.status === 'Open Now')
+      || (pharmacyFilter === 'Delivery' && facility.delivery)
+      || (pharmacyFilter === 'Consultation' && facility.services.join(' ').toLowerCase().includes('consult'))
+      || (pharmacyFilter === '24 Hours' && facility.hours === '24 hours')
+      || pharmacyFilter === 'Nearest',
+    )
+    .sort((a, b) => pharmacyFilter === 'Nearest' ? parseFloat(a.distance) - parseFloat(b.distance) : 0);
 
   return (
     <section className="space-y-5">
       <SectionHeader title="Pharmacy module" subtitle="Find pharmacies, open profiles, view inventory, chat, call and navigate." />
-      <FacilityCards title="Nearby pharmacies" facilities={facilities} onSelectFacility={onSelectFacility} />
-      <FacilityProfile facility={selectedFacility} onOpenAction={onOpenAction} />
-      <Inventory title={`${selectedFacility.name} medicines in stock`} medicines={inventory} onAddToCart={onAddToCart} />
+      <LiveFacilityMap
+        title="Live pharmacy map"
+        facilities={filteredPharmacies}
+        selectedFacility={activeFacility}
+        onSelectFacility={onSelectFacility}
+        onOpenFacility={onOpenFacility}
+      />
+      <FilterRow
+        values={['All', 'Verified', 'Open Now', 'Delivery', 'Consultation', 'Nearest', '24 Hours']}
+        active={pharmacyFilter}
+        onChange={onPharmacyFilterChange}
+      />
+      <FacilityCards title="Nearby pharmacies" facilities={filteredPharmacies} onSelectFacility={onSelectFacility} onOpenFacility={onOpenFacility} />
+      <FacilityProfile facility={activeFacility} onOpenAction={onOpenAction} />
+      <Inventory title={`${activeFacility.name} medicines in stock`} medicines={inventory} onAddToCart={onAddToCart} />
     </section>
   );
 }
@@ -732,20 +796,108 @@ function HospitalsModule({
   facilities,
   selectedFacility,
   onSelectFacility,
+  onOpenFacility,
   onOpenAction,
 }: {
   facilities: Facility[];
   selectedFacility: Facility;
   onSelectFacility: (id: string) => void;
+  onOpenFacility: (facility: Facility) => void;
   onOpenAction: (panel: ActionPanelContent) => void;
 }) {
+  const activeFacility = facilities.find((facility) => facility.id === selectedFacility.id) ?? facilities[0] ?? selectedFacility;
+
   return (
     <section className="space-y-5">
       <SectionHeader title="Health facilities" subtitle="Open facility profiles, services, contact options, appointments and navigation." />
-      <FacilityCards title="Hospitals, clinics and labs" facilities={facilities} onSelectFacility={onSelectFacility} />
-      <FacilityProfile facility={selectedFacility} onOpenAction={onOpenAction} />
-      <AppointmentCard facility={selectedFacility} onOpenAction={onOpenAction} />
+      <LiveFacilityMap
+        title="Live health facility map"
+        facilities={facilities}
+        selectedFacility={activeFacility}
+        onSelectFacility={onSelectFacility}
+        onOpenFacility={onOpenFacility}
+      />
+      <FacilityCards title="Hospitals, clinics and labs" facilities={facilities} onSelectFacility={onSelectFacility} onOpenFacility={onOpenFacility} />
+      <FacilityProfile facility={activeFacility} onOpenAction={onOpenAction} />
+      <AppointmentCard facility={activeFacility} onOpenAction={onOpenAction} />
     </section>
+  );
+}
+
+function LiveFacilityMap({
+  title,
+  facilities,
+  selectedFacility,
+  onSelectFacility,
+  onOpenFacility,
+}: {
+  title: string;
+  facilities: Facility[];
+  selectedFacility: Facility;
+  onSelectFacility: (id: string) => void;
+  onOpenFacility: (facility: Facility) => void;
+}) {
+  const pinPositions = [
+    { left: '16%', top: '34%' },
+    { left: '46%', top: '56%' },
+    { left: '68%', top: '30%' },
+    { left: '78%', top: '66%' },
+  ];
+
+  return (
+    <article className="overflow-hidden rounded-3xl border border-teal-100 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">{title}</h3>
+          <p className="text-sm text-slate-500">Tap a pin or list card to focus the map and open the profile window.</p>
+        </div>
+        <span className="rounded-full bg-[#EAF8F8] px-4 py-2 text-sm font-black text-[#087D7D]">GPS location detected</span>
+      </div>
+      <div className="relative mx-5 h-64 overflow-hidden rounded-[28px] bg-[#EAF8F8]">
+        <div className="absolute inset-0 opacity-80" style={{
+          backgroundImage:
+            'linear-gradient(90deg, rgba(26,166,166,.16) 1px, transparent 1px), linear-gradient(rgba(26,166,166,.16) 1px, transparent 1px)',
+          backgroundSize: '42px 42px',
+        }} />
+        <div className="absolute left-0 top-1/2 h-2 w-full -rotate-12 bg-white/80" />
+        <div className="absolute left-1/4 top-0 h-full w-2 rotate-12 bg-white/80" />
+        <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-2 text-xs font-black text-[#087D7D] shadow-sm">
+          Current location
+        </span>
+        <span className="absolute bottom-5 left-6 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#1AA6A6] text-xs font-black text-white shadow-lg">
+          You
+        </span>
+        <span className="absolute bottom-12 left-14 h-1 w-40 -rotate-12 rounded-full bg-[#FF8A00]" />
+        {facilities.slice(0, 4).map((facility, index) => {
+          const isSelected = facility.id === selectedFacility.id;
+          return (
+            <button
+              className={`absolute min-w-28 -translate-x-1/2 rounded-2xl px-3 py-2 text-left text-xs font-black shadow-lg transition hover:-translate-y-1 ${isSelected ? 'bg-[#FF8A00] text-white' : 'bg-white text-slate-800'}`}
+              key={facility.id}
+              style={pinPositions[index]}
+              onClick={() => {
+                onSelectFacility(facility.id);
+                onOpenFacility(facility);
+              }}
+            >
+              <MapPin className={isSelected ? 'text-white' : 'text-[#087D7D]'} size={16} />
+              <span className="block">{facility.name.split(' ')[0]}</span>
+              <small className={isSelected ? 'text-white/90' : 'text-slate-500'}>{facility.distance} away</small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="grid gap-3 p-5 md:grid-cols-[1fr_auto] md:items-center">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-[#087D7D]">Selected on map</p>
+          <h4 className="mt-1 text-xl font-black text-slate-950">{selectedFacility.name}</h4>
+          <p className="mt-1 text-sm text-slate-600">{selectedFacility.distance} away · {selectedFacility.status} · {selectedFacility.hours}</p>
+        </div>
+        <button className="rounded-full bg-[#1AA6A6] px-5 py-3 text-sm font-black text-white" onClick={() => onOpenFacility(selectedFacility)}>
+          Open profile window
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -753,17 +905,26 @@ function FacilityCards({
   title,
   facilities,
   onSelectFacility,
+  onOpenFacility,
 }: {
   title: string;
   facilities: Facility[];
   onSelectFacility: (id: string) => void;
+  onOpenFacility: (facility: Facility) => void;
 }) {
   return (
     <div>
       <h3 className="mb-3 text-lg font-black text-slate-950">{title}</h3>
       <div className="grid gap-4">
         {facilities.map((facility) => (
-          <button className="rounded-3xl border border-teal-100 bg-white p-5 text-left shadow-sm hover:border-[#1AA6A6]" key={facility.id} onClick={() => onSelectFacility(facility.id)}>
+          <button
+            className="rounded-3xl border border-teal-100 bg-white p-5 text-left shadow-sm hover:border-[#1AA6A6]"
+            key={facility.id}
+            onClick={() => {
+              onSelectFacility(facility.id);
+              onOpenFacility(facility);
+            }}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-[#087D7D]">{facility.type} · {facility.province}</p>
@@ -1155,12 +1316,14 @@ function Accounts({
   loggedInAccount,
   onAccountTypeChange,
   onLogin,
+  onNavigate,
   onOpenAction,
 }: {
   accountType: AccountType;
   loggedInAccount: AccountType | null;
   onAccountTypeChange: (type: AccountType) => void;
   onLogin: (type: AccountType) => void;
+  onNavigate: (module: ModuleId) => void;
   onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const selected = accounts.find((account) => account.id === accountType) ?? accounts[0];
@@ -1204,18 +1367,38 @@ function Accounts({
           Continue as {selected.title}
         </button>
       </article>
-      {loggedInAccount && <RoleWorkspace accountType={loggedInAccount} onOpenAction={onOpenAction} />}
+      {loggedInAccount && <RoleWorkspace accountType={loggedInAccount} onNavigate={onNavigate} onOpenAction={onOpenAction} />}
     </section>
   );
 }
 
-function RoleWorkspace({ accountType, onOpenAction }: { accountType: AccountType; onOpenAction: (panel: ActionPanelContent) => void }) {
+function RoleWorkspace({
+  accountType,
+  onNavigate,
+  onOpenAction,
+}: {
+  accountType: AccountType;
+  onNavigate: (module: ModuleId) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
+}) {
   const workspaces = {
     patient: {
       title: 'Patient workspace',
       subtitle: 'For ordinary users seeking care, medicines, bookings and community access.',
       metrics: ['2 active orders', '4 saved providers', '1 upcoming appointment', 'NHIMA active'],
-      actions: ['Search medicines', 'Buy OTC medicines', 'Book appointment', 'Use telemedicine', 'Comment in community', 'Save provider'],
+      actions: [
+        'Search hospitals',
+        'Search pharmacies',
+        'Search doctors',
+        'Search medicines',
+        'Buy OTC medicines',
+        'Book appointments',
+        'Use telemedicine',
+        'Comment in community',
+        'Save favorite providers',
+        'Receive notifications',
+        'My Medical Profile',
+      ],
       restricted: ['Cannot post health education', 'Cannot manage facilities', 'Cannot advertise services'],
     },
     health_worker: {
@@ -1235,6 +1418,16 @@ function RoleWorkspace({ accountType, onOpenAction }: { accountType: AccountType
   } satisfies Record<AccountType, { title: string; subtitle: string; metrics: string[]; actions: string[]; restricted: string[] }>;
 
   const workspace = workspaces[accountType];
+  const routeForAction = (item: string): ModuleId | null => {
+    const text = item.toLowerCase();
+    if (text.includes('pharmac')) return 'pharmacy';
+    if (text.includes('hospital') || text.includes('doctor')) return 'hospitals';
+    if (text.includes('medicine') || text.includes('otc')) return 'medicines';
+    if (text.includes('appointment') || text.includes('telemedicine')) return 'services';
+    if (text.includes('community') || text.includes('comment')) return 'community';
+    if (text.includes('medical profile')) return 'medical-profile';
+    return null;
+  };
 
   return (
     <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
@@ -1263,12 +1456,19 @@ function RoleWorkspace({ accountType, onOpenAction }: { accountType: AccountType
               <button
                 className="flex items-center justify-between rounded-2xl bg-white p-3 text-left text-sm font-bold text-slate-700"
                 key={item}
-                onClick={() => onOpenAction({
-                  title: item,
-                  subtitle: `${workspace.title} action window.`,
-                  items: ['Open action workspace', 'Show relevant records, forms or approvals', 'Save changes to the correct account role.'],
-                  primaryAction: 'Open',
-                })}
+                onClick={() => {
+                  const route = routeForAction(item);
+                  if (route) {
+                    onNavigate(route);
+                    return;
+                  }
+                  onOpenAction({
+                    title: item,
+                    subtitle: `${workspace.title} action window.`,
+                    items: ['Open action workspace', 'Show relevant records, forms or approvals', 'Save changes to the correct account role.'],
+                    primaryAction: 'Open',
+                  });
+                }}
               >
                 {item}
                 <ChevronRight size={16} />
