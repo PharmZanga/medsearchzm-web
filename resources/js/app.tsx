@@ -78,6 +78,7 @@ type ActionPanelContent = {
   title: string;
   subtitle: string;
   items: string[];
+  actions?: ActionPanelContent[];
   primaryAction?: string;
 };
 
@@ -401,17 +402,94 @@ function App() {
   function openFacilityWindow(facility: Facility) {
     setSelectedFacilityId(facility.id);
     const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(facility.id));
+    const serviceBookingActions = facility.services.map((service) => ({
+      title: `Book ${service}`,
+      subtitle: `${facility.name} service booking`,
+      items: ['Choose date on the calendar', 'Choose available time', 'Confirm before sending the request to the provider.'],
+      primaryAction: 'Confirm booking',
+    }));
     openAction({
       title: `${facility.name} profile`,
       subtitle: `${facility.type} · ${facility.distance} away · ${facility.status} · ${facility.rating}/5 rating`,
       items: [
-        `Quick actions: Call, Chat, WhatsApp, Directions, Share`,
-        `Services Offered: ${facility.services.join(', ')}`,
-        `Medicines In Stock: ${inventory.length ? inventory.map((medicine) => medicine.name).join(', ') : 'Service catalogue available'}`,
-        `Delivery Services: ${facility.delivery ? 'Delivery available with order tracking' : 'Delivery not currently available'}`,
-        `Map and Navigation: live route from current location to ${facility.name}`,
+        facility.verified ? 'Verified Provider' : 'Provider verification pending',
+        `${facility.distance} away from current location`,
+        `${facility.status} · ${facility.hours}`,
+        facility.delivery ? 'Delivery available' : 'Pickup or appointment request available',
       ],
-      primaryAction: 'Open full profile',
+      actions: [
+        {
+          title: `Call ${facility.name}?`,
+          subtitle: 'Confirm before opening the phone dialer.',
+          items: [`Phone: ${facility.phone}`, 'Cancel | Call confirmation appears first', 'Audio calls use the native phone call flow.'],
+          primaryAction: 'Call now',
+        },
+        {
+          title: `Chat with ${facility.name}`,
+          subtitle: 'In-app conversation window.',
+          items: ['Ask about medicine stock or services', 'Upload prescription or image', 'Read receipts and typing indicator appear here.'],
+          primaryAction: 'Send message',
+        },
+        {
+          title: `WhatsApp ${facility.name}`,
+          subtitle: 'Prepared WhatsApp support message.',
+          items: [`WhatsApp: ${facility.phone}`, `Hello ${facility.name}, I found you on MedSearch Zambia and would like assistance.`, 'User confirms before leaving MedSearch.'],
+          primaryAction: 'Open WhatsApp',
+        },
+        {
+          title: `Navigate to ${facility.name}`,
+          subtitle: 'Live route inside MedSearch.',
+          items: [`Distance remaining: ${facility.distance}`, 'Walking route', 'Driving route', 'Motorcycle route', 'Turn left in 200m, then continue 1km.'],
+          primaryAction: 'Start navigation',
+        },
+        {
+          title: `Services Offered`,
+          subtitle: `${facility.name} service list`,
+          items: facility.services.map((service) => `${service} · Available`),
+          actions: serviceBookingActions,
+          primaryAction: 'Book service',
+        },
+        {
+          title: facility.type === 'Pharmacy' ? 'Medicines In Stock' : 'Services and Departments',
+          subtitle: facility.type === 'Pharmacy' ? 'Search medicines, compare stock and order.' : 'Departments and services available at this facility.',
+          items: inventory.length
+            ? inventory.map((medicine) => `${medicine.name} · ZMW ${medicine.price} · ${medicine.stock} packs`)
+            : facility.services.map((service) => `${service} · Open for patient request`),
+          primaryAction: facility.type === 'Pharmacy' ? 'Open inventory' : 'Book appointment',
+        },
+        {
+          title: 'Prices',
+          subtitle: 'Transparent patient-facing costs.',
+          items: ['Service price range shown before booking', 'NHIMA/private insurance support shown where available', 'Patient confirms before payment or booking.'],
+          primaryAction: 'View prices',
+        },
+        {
+          title: 'Delivery System',
+          subtitle: facility.delivery ? 'Delivery available from this provider.' : 'Delivery can be requested if enabled.',
+          items: facility.delivery
+            ? ['Delivery fee from ZMW 20', 'Estimated arrival 45-90 minutes', 'Prescription required before delivery when needed', 'Track delivery inside MedSearch.']
+            : ['Pickup available', 'Delivery request can be sent to provider', 'Confirmation required before order.'],
+          primaryAction: 'Open delivery',
+        },
+        {
+          title: 'Operational Time',
+          subtitle: `${facility.status} · ${facility.hours}`,
+          items: [`Today: ${facility.hours}`, 'Weekend hours shown here', 'Holiday closure alerts shown here.'],
+          primaryAction: 'View hours',
+        },
+        {
+          title: 'Patient Rating',
+          subtitle: `${facility.rating}/5 patient rating`,
+          items: ['Verified patient reviews', 'Fast service', 'Friendly staff', 'Report issue option available.'],
+          primaryAction: 'View reviews',
+        },
+        {
+          title: `Share ${facility.name}`,
+          subtitle: 'Share this provider profile.',
+          items: [`${facility.name}`, `${facility.distance} away`, `${facility.status} · ${facility.hours}`],
+          primaryAction: 'Share profile',
+        },
+      ],
     });
   }
 
@@ -580,7 +658,7 @@ function App() {
           onQueryChange={setQuery}
         >
           {currentModuleScreen()}
-          {actionPanel && <ActionPanel panel={actionPanel} onClose={() => setActionPanel(null)} />}
+          {actionPanel && <ActionPanel panel={actionPanel} onOpen={setActionPanel} onClose={() => setActionPanel(null)} />}
         </AppPage>
       )}
     </main>
@@ -1893,7 +1971,15 @@ function OrdersSnapshot({ toast }: { toast: string }) {
   );
 }
 
-function ActionPanel({ panel, onClose }: { panel: ActionPanelContent; onClose: () => void }) {
+function ActionPanel({
+  panel,
+  onOpen,
+  onClose,
+}: {
+  panel: ActionPanelContent;
+  onOpen: (panel: ActionPanelContent) => void;
+  onClose: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-3 py-4 backdrop-blur-sm md:items-center">
       <button className="absolute inset-0 cursor-default" aria-label="Close window" onClick={onClose} />
@@ -1916,6 +2002,23 @@ function ActionPanel({ panel, onClose }: { panel: ActionPanelContent; onClose: (
             </div>
           ))}
         </div>
+        {panel.actions && panel.actions.length > 0 && (
+          <div className="mt-5">
+            <h3 className="text-lg font-black text-slate-950">Choose one option</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {panel.actions.map((action) => (
+                <button
+                  className="rounded-2xl bg-[#F6FBFB] p-4 text-left transition hover:bg-[#EAF8F8]"
+                  key={`${panel.title}-${action.title}`}
+                  onClick={() => onOpen(action)}
+                >
+                  <strong className="text-slate-950">{action.title}</strong>
+                  <p className="mt-1 text-sm text-slate-600">{action.subtitle}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {panel.primaryAction && (
           <button className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white" onClick={onClose}>
             {panel.primaryAction}
