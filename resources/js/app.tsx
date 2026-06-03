@@ -80,6 +80,7 @@ type ActionPanelContent = {
   items: string[];
   actions?: ActionPanelContent[];
   primaryAction?: string;
+  primaryPanel?: ActionPanelContent;
 };
 
 const primary = '#1AA6A6';
@@ -408,6 +409,32 @@ function App() {
       items: ['Choose date on the calendar', 'Choose available time', 'Confirm before sending the request to the provider.'],
       primaryAction: 'Confirm booking',
     }));
+    const inventoryPanel = {
+      title: `${facility.name} inventory`,
+      subtitle: 'Dedicated medicine stock window.',
+      items: inventory.length
+        ? inventory.map((medicine) => `${medicine.name} · ${medicine.brand} · ZMW ${medicine.price} · ${medicine.stock} packs`)
+        : ['No medicine inventory is currently linked to this facility.'],
+      actions: inventory.map((medicine) => ({
+        title: medicine.name,
+        subtitle: `${medicine.brand} · ${medicine.generic} · ${medicine.category}`,
+        items: [
+          `Price: ZMW ${medicine.price}`,
+          `Stock: ${medicine.stock} packs`,
+          medicine.prescription ? 'Prescription required before checkout.' : 'Available for OTC checkout.',
+          `Available at ${facility.name}`,
+        ],
+        primaryAction: medicine.prescription ? 'Upload prescription' : 'Buy now',
+      })),
+      primaryAction: inventory.length ? 'Proceed to checkout' : 'Back to profile',
+    };
+    const departmentsPanel = {
+      title: `${facility.name} departments`,
+      subtitle: 'Dedicated services and departments window.',
+      items: facility.services.map((service) => `${service} · Open for patient request`),
+      actions: serviceBookingActions,
+      primaryAction: 'Book appointment',
+    };
     openAction({
       title: `${facility.name} profile`,
       subtitle: `${facility.type} · ${facility.distance} away · ${facility.status} · ${facility.rating}/5 rating`,
@@ -455,7 +482,9 @@ function App() {
           items: inventory.length
             ? inventory.map((medicine) => `${medicine.name} · ZMW ${medicine.price} · ${medicine.stock} packs`)
             : facility.services.map((service) => `${service} · Open for patient request`),
+          actions: facility.type === 'Pharmacy' ? inventoryPanel.actions : serviceBookingActions,
           primaryAction: facility.type === 'Pharmacy' ? 'Open inventory' : 'Book appointment',
+          primaryPanel: facility.type === 'Pharmacy' ? inventoryPanel : departmentsPanel,
         },
         {
           title: 'Prices',
@@ -1042,6 +1071,38 @@ function FacilityCards({
 
 function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpenAction: (panel: ActionPanelContent) => void }) {
   const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(facility.id));
+  const inventoryPanel = {
+    title: `${facility.name} inventory`,
+    subtitle: 'Dedicated medicine stock window.',
+    items: inventory.length
+      ? inventory.map((medicine) => `${medicine.name} · ${medicine.brand} · ZMW ${medicine.price} · ${medicine.stock} packs`)
+      : ['No medicine inventory is currently linked to this facility.'],
+    actions: inventory.map((medicine) => ({
+      title: medicine.name,
+      subtitle: `${medicine.brand} · ${medicine.generic} · ${medicine.category}`,
+      items: [
+        `Price: ZMW ${medicine.price}`,
+        `Stock: ${medicine.stock} packs`,
+        medicine.prescription ? 'Prescription required before checkout.' : 'Available for OTC checkout.',
+        `Available at ${facility.name}`,
+      ],
+      primaryAction: medicine.prescription ? 'Upload prescription' : 'Buy now',
+    })),
+    primaryAction: inventory.length ? 'Proceed to checkout' : 'Back to profile',
+  };
+  const departmentBookingActions = facility.services.map((service) => ({
+    title: `Book ${service}`,
+    subtitle: `${facility.name} service booking`,
+    items: ['Choose date on the calendar', 'Choose available time', 'Confirm before sending the request to the provider.'],
+    primaryAction: 'Confirm booking',
+  }));
+  const departmentsPanel = {
+    title: `${facility.name} departments`,
+    subtitle: 'Dedicated services and departments window.',
+    items: facility.services.map((service) => `${service} · Open for patient request`),
+    actions: departmentBookingActions,
+    primaryAction: 'Book appointment',
+  };
   const actionPanels = {
     call: {
       title: `Call ${facility.name}?`,
@@ -1112,7 +1173,9 @@ function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpe
       items: inventory.length
         ? inventory.map((medicine) => `${medicine.name} · ZMW ${medicine.price} · ${medicine.stock} packs`)
         : facility.services.map((service) => `${service} · Open for patient request`),
+      actions: facility.type === 'Pharmacy' ? inventoryPanel.actions : departmentBookingActions,
       primaryAction: facility.type === 'Pharmacy' ? 'Open inventory' : 'View departments',
+      primaryPanel: facility.type === 'Pharmacy' ? inventoryPanel : departmentsPanel,
     },
     {
       title: 'Prices',
@@ -2020,7 +2083,16 @@ function ActionPanel({
           </div>
         )}
         {panel.primaryAction && (
-          <button className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white" onClick={onClose}>
+          <button
+            className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white"
+            onClick={() => {
+              if (panel.primaryPanel) {
+                onOpen(panel.primaryPanel);
+                return;
+              }
+              onClose();
+            }}
+          >
             {panel.primaryAction}
           </button>
         )}
