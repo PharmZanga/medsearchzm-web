@@ -74,6 +74,13 @@ type CartItem = {
   quantity: number;
 };
 
+type ActionPanelContent = {
+  title: string;
+  subtitle: string;
+  items: string[];
+  primaryAction?: string;
+};
+
 const primary = '#1AA6A6';
 
 const medicines: Medicine[] = [
@@ -341,6 +348,7 @@ function App() {
   const [communityTab, setCommunityTab] = useState('Feed');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toast, setToast] = useState('Ready');
+  const [actionPanel, setActionPanel] = useState<ActionPanelContent | null>(null);
 
   const selectedFacility = facilities.find((facility) => facility.id === selectedFacilityId) ?? facilities[0];
   const selectedMedicine = medicines.find((medicine) => medicine.id === selectedMedicineId) ?? medicines[0];
@@ -369,7 +377,13 @@ function App() {
       window.history.pushState({}, '', nextUrl);
     }
     setActiveModule(module);
+    setActionPanel(null);
     setToast(`Opened ${module === 'home' ? 'home' : module.replace('-', ' ')}`);
+  }
+
+  function openAction(panel: ActionPanelContent) {
+    setActionPanel(panel);
+    setToast(panel.title);
   }
 
   function addToCart(medicineId: string) {
@@ -419,6 +433,7 @@ function App() {
           selectedFacility={selectedFacility}
           onSelectFacility={setSelectedFacilityId}
           onAddToCart={addToCart}
+          onOpenAction={openAction}
         />
       );
     }
@@ -429,6 +444,7 @@ function App() {
           facilities={filteredFacilities.filter((facility) => facility.type !== 'Pharmacy')}
           selectedFacility={selectedFacility}
           onSelectFacility={setSelectedFacilityId}
+          onOpenAction={openAction}
         />
       );
     }
@@ -440,6 +456,7 @@ function App() {
           onSelectService={setSelectedService}
           onSelectFacility={setSelectedFacilityId}
           onNavigate={navigate}
+          onOpenAction={openAction}
         />
       );
     }
@@ -452,16 +469,17 @@ function App() {
           onSelectMedicine={setSelectedMedicineId}
           onAddToCart={addToCart}
           onNavigate={navigate}
+          onOpenAction={openAction}
         />
       );
     }
 
     if (activeModule === 'community') {
-      return <Community activeTab={communityTab} onTabChange={setCommunityTab} />;
+      return <Community activeTab={communityTab} onTabChange={setCommunityTab} onOpenAction={openAction} />;
     }
 
     if (activeModule === 'medical-profile') {
-      return <MedicalProfile />;
+      return <MedicalProfile onOpenAction={openAction} />;
     }
 
     if (activeModule === 'accounts') {
@@ -475,6 +493,7 @@ function App() {
             setLoggedInAccount(type);
             setToast(`Logged in as ${type.replace('_', ' ')}`);
           }}
+          onOpenAction={openAction}
         />
       );
     }
@@ -495,19 +514,20 @@ function App() {
           <aside className="space-y-5">
             <QuickActions onNavigate={navigate} />
             <CarolineCard onNavigate={navigate} selectedMedicine={selectedMedicine} selectedFacility={selectedFacility} />
-            <CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} />
+            <CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} onOpenAction={openAction} />
             <OrdersSnapshot toast={toast} />
           </aside>
         </section>
       ) : (
         <AppPage
           activeModule={activeModule}
-          cart={<CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} />}
+          cart={<CartPanel cart={cart} total={cartTotal} onUpdateCart={updateCart} onOpenAction={openAction} />}
           onBack={() => navigate('home')}
           query={query}
           onQueryChange={setQuery}
         >
           {currentModuleScreen()}
+          {actionPanel && <ActionPanel panel={actionPanel} onClose={() => setActionPanel(null)} />}
         </AppPage>
       )}
     </main>
@@ -688,11 +708,13 @@ function PharmacyModule({
   selectedFacility,
   onSelectFacility,
   onAddToCart,
+  onOpenAction,
 }: {
   facilities: Facility[];
   selectedFacility: Facility;
   onSelectFacility: (id: string) => void;
   onAddToCart: (medicineId: string) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(selectedFacility.id));
 
@@ -700,7 +722,7 @@ function PharmacyModule({
     <section className="space-y-5">
       <SectionHeader title="Pharmacy module" subtitle="Find pharmacies, open profiles, view inventory, chat, call and navigate." />
       <FacilityCards title="Nearby pharmacies" facilities={facilities} onSelectFacility={onSelectFacility} />
-      <FacilityProfile facility={selectedFacility} />
+      <FacilityProfile facility={selectedFacility} onOpenAction={onOpenAction} />
       <Inventory title={`${selectedFacility.name} medicines in stock`} medicines={inventory} onAddToCart={onAddToCart} />
     </section>
   );
@@ -710,17 +732,19 @@ function HospitalsModule({
   facilities,
   selectedFacility,
   onSelectFacility,
+  onOpenAction,
 }: {
   facilities: Facility[];
   selectedFacility: Facility;
   onSelectFacility: (id: string) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   return (
     <section className="space-y-5">
       <SectionHeader title="Health facilities" subtitle="Open facility profiles, services, contact options, appointments and navigation." />
       <FacilityCards title="Hospitals, clinics and labs" facilities={facilities} onSelectFacility={onSelectFacility} />
-      <FacilityProfile facility={selectedFacility} />
-      <AppointmentCard facility={selectedFacility} />
+      <FacilityProfile facility={selectedFacility} onOpenAction={onOpenAction} />
+      <AppointmentCard facility={selectedFacility} onOpenAction={onOpenAction} />
     </section>
   );
 }
@@ -758,7 +782,40 @@ function FacilityCards({
   );
 }
 
-function FacilityProfile({ facility }: { facility: Facility }) {
+function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpenAction: (panel: ActionPanelContent) => void }) {
+  const actionPanels = {
+    call: {
+      title: `Call ${facility.name}?`,
+      subtitle: 'This would open the phone dialer in the mobile app.',
+      items: [`Phone: ${facility.phone}`, 'Confirmation: Cancel | Call', 'Audio calls use the native phone call flow.'],
+      primaryAction: 'Call now',
+    },
+    chat: {
+      title: `Chat with ${facility.name}`,
+      subtitle: 'In-app messaging window for pharmacy or facility support.',
+      items: ['User: Do you have insulin?', 'Provider: Yes, Humulin and Mixtard are available.', 'Prescription upload, read receipts and typing indicator enabled.'],
+      primaryAction: 'Send message',
+    },
+    directions: {
+      title: `Navigate to ${facility.name}`,
+      subtitle: 'In-app map and route guidance, not a forced external redirect.',
+      items: [`Distance remaining: ${facility.distance}`, 'Turn left in 200m', 'Continue 1km', 'Walking, driving and motorcycle routes available.'],
+      primaryAction: 'Start navigation',
+    },
+    book: {
+      title: `Book ${facility.name}`,
+      subtitle: 'Choose date and time, then confirm before booking.',
+      items: ['Calendar: Today, Tomorrow, Friday', 'Times: 09:00, 11:30, 14:00', 'Confirmation prompt appears before final booking.'],
+      primaryAction: 'Open booking',
+    },
+    rx: {
+      title: `Upload prescription to ${facility.name}`,
+      subtitle: 'Secure prescription upload for review before order or delivery.',
+      items: ['Upload photo or PDF', 'Pharmacist reviews medicine request', 'User receives chat update when approved.'],
+      primaryAction: 'Upload prescription',
+    },
+  } satisfies Record<string, ActionPanelContent>;
+
   return (
     <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
       <div className="flex items-start justify-between gap-4">
@@ -773,11 +830,11 @@ function FacilityProfile({ facility }: { facility: Facility }) {
         </div>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-5">
-        <ActionButton icon={Phone} label="Call" />
-        <ActionButton icon={MessageCircle} label="Chat" />
-        <ActionButton icon={MapPin} label="Directions" />
-        <ActionButton icon={CalendarDays} label="Book" />
-        <ActionButton icon={Upload} label="Upload Rx" />
+        <ActionButton icon={Phone} label="Call" onClick={() => onOpenAction(actionPanels.call)} />
+        <ActionButton icon={MessageCircle} label="Chat" onClick={() => onOpenAction(actionPanels.chat)} />
+        <ActionButton icon={MapPin} label="Directions" onClick={() => onOpenAction(actionPanels.directions)} />
+        <ActionButton icon={CalendarDays} label="Book" onClick={() => onOpenAction(actionPanels.book)} />
+        <ActionButton icon={Upload} label="Upload Rx" onClick={() => onOpenAction(actionPanels.rx)} />
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <InfoList title="Services offered" items={facility.services} />
@@ -806,12 +863,14 @@ function Medicines({
   onSelectMedicine,
   onAddToCart,
   onNavigate,
+  onOpenAction,
 }: {
   medicines: Medicine[];
   selectedMedicine: Medicine;
   onSelectMedicine: (id: string) => void;
   onAddToCart: (id: string) => void;
   onNavigate: (module: ModuleId) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const categories = ['All', ...Array.from(new Set(medicines.map((medicine) => medicine.category)))];
   const brands = ['All', 'Denk', 'Shalina', 'Yashi', 'NovoCare'];
@@ -851,6 +910,22 @@ function Medicines({
             </button>
           ))}
         </div>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button className="rounded-full bg-[#1AA6A6] px-5 py-3 font-bold text-white" onClick={() => onAddToCart(selectedMedicine.id)}>
+            Add to Cart
+          </button>
+          <button
+            className="rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white"
+            onClick={() => onOpenAction({
+              title: `Buy ${selectedMedicine.name}`,
+              subtitle: 'Checkout flow for medicine order.',
+              items: [`Medicine: ${selectedMedicine.name}`, `Price: ZMW ${selectedMedicine.price}`, 'Delivery or pickup choice', 'Payment confirmation before order is submitted.'],
+              primaryAction: 'Proceed to checkout',
+            })}
+          >
+            Buy Now
+          </button>
+        </div>
       </article>
     </section>
   );
@@ -888,19 +963,32 @@ function Services({
   onSelectService,
   onSelectFacility,
   onNavigate,
+  onOpenAction,
 }: {
   selectedService: string;
   onSelectService: (service: string) => void;
   onSelectFacility: (id: string) => void;
   onNavigate: (module: ModuleId) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
 }) {
-  const offeringFacilities = facilities.filter((facility) =>
-    facility.services.some((service) => service.toLowerCase().includes(selectedService.split(' ')[0].toLowerCase())) ||
-    selectedService.includes('Appointment') ||
-    selectedService.includes('Telemedicine') ||
-    selectedService.includes('Laboratory') ||
-    selectedService.includes('X-ray'),
-  );
+  const selected = selectedService.toLowerCase();
+  const serviceKeywords = selected.includes('telemedicine')
+    ? ['telemedicine']
+    : selected.includes('laboratory') || selected.includes('blood') || selected.includes('hiv') || selected.includes('covid') || selected.includes('tb')
+      ? ['lab', 'blood', 'hiv', 'covid', 'tb', 'malaria']
+      : selected.includes('x-ray') || selected.includes('radiology')
+        ? ['x-ray']
+        : selected.includes('prescription') || selected.includes('medicine') || selected.includes('chronic') || selected.includes('medication')
+          ? ['prescription', 'medicine', 'chronic', 'delivery', 'review']
+          : selected.includes('general') || selected.includes('child') || selected.includes('maternal')
+            ? ['consultation', 'child', 'maternal']
+            : [];
+
+  const offeringFacilities = facilities.filter((facility) => {
+    if (selected.includes('appointment')) return true;
+    const facilityServices = facility.services.join(' ').toLowerCase();
+    return serviceKeywords.some((keyword) => facilityServices.includes(keyword));
+  });
 
   return (
     <section className="space-y-5">
@@ -914,7 +1002,19 @@ function Services({
             </div>
             <div className="mt-4 space-y-2">
               {category.services.map((service) => (
-                <button className={`flex w-full items-center justify-between rounded-2xl p-3 text-left text-sm font-bold ${selectedService === service ? 'bg-[#1AA6A6] text-white' : 'bg-slate-50 text-slate-700'}`} key={service} onClick={() => onSelectService(service)}>
+                <button
+                  className={`flex w-full items-center justify-between rounded-2xl p-3 text-left text-sm font-bold ${selectedService === service ? 'bg-[#1AA6A6] text-white' : 'bg-slate-50 text-slate-700'}`}
+                  key={service}
+                  onClick={() => {
+                    onSelectService(service);
+                    onOpenAction({
+                      title: service,
+                      subtitle: 'Service information before choosing a facility.',
+                      items: ['Short description shown to the patient', 'Price range displayed before facility list', 'Tap a facility to open profile, booking, call or directions.'],
+                      primaryAction: 'Find facilities',
+                    });
+                  }}
+                >
                   {service}
                   <ChevronRight size={18} />
                 </button>
@@ -939,7 +1039,7 @@ function Services({
   );
 }
 
-function Community({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
+function Community({ activeTab, onTabChange, onOpenAction }: { activeTab: string; onTabChange: (tab: string) => void; onOpenAction: (panel: ActionPanelContent) => void }) {
   const posts = [
     ['Maternity Tour', 'Levy Mwanawasa Hospital', '2:45 video', '25 Likes', '14 Comments'],
     ['How to Use an Inhaler', 'Fine Pharmacy', '60 second health tip', '41 Likes', '22 Comments'],
@@ -957,7 +1057,17 @@ function Community({ activeTab, onTabChange }: { activeTab: string; onTabChange:
             <article className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm" key={group}>
               <h3 className="text-lg font-black">{group}</h3>
               <p className="mt-2 text-sm text-slate-600">{[12000, 8500, 6000, 4500][index].toLocaleString()} members</p>
-              <button className="mt-4 rounded-full bg-[#1AA6A6] px-4 py-2 text-sm font-bold text-white">Join Group</button>
+              <button
+                className="mt-4 rounded-full bg-[#1AA6A6] px-4 py-2 text-sm font-bold text-white"
+                onClick={() => onOpenAction({
+                  title: group,
+                  subtitle: 'Community group window.',
+                  items: ['Post a question', 'Read provider updates', 'Follow verified professionals', 'Receive group notifications.'],
+                  primaryAction: 'Join group',
+                })}
+              >
+                Join Group
+              </button>
             </article>
           ))}
         </div>
@@ -971,7 +1081,22 @@ function Community({ activeTab, onTabChange }: { activeTab: string; onTabChange:
                   <h3 className="text-lg font-black text-slate-950">{title}</h3>
                   <p className="text-sm text-slate-500">{author} · {detail}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {[likes, comments, '7 Shares', 'Save', 'Follow'].map((item) => <PillTag key={item}>{item}</PillTag>)}
+                    {[likes, comments, '7 Shares', 'Save', 'Follow'].map((item) => (
+                      <button
+                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600"
+                        key={item}
+                        onClick={() => onOpenAction({
+                          title: `${item} - ${title}`,
+                          subtitle: 'Community engagement window.',
+                          items: item.includes('Comments')
+                            ? ['Jane: Where can I get this service?', 'Fine Pharmacy: Available at our branch.', 'Dr Mwansa: Thank you for asking.']
+                            : ['Action recorded in the community feed', 'User notification updated', 'Provider engagement analytics updated.'],
+                          primaryAction: item.includes('Comments') ? 'Add comment' : item,
+                        })}
+                      >
+                        {item}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -983,7 +1108,16 @@ function Community({ activeTab, onTabChange }: { activeTab: string; onTabChange:
   );
 }
 
-function MedicalProfile() {
+function MedicalProfile({ onOpenAction }: { onOpenAction: (panel: ActionPanelContent) => void }) {
+  const profileTiles = [
+    ['Last BP check', '128/82 mmHg', '25 May 2026'],
+    ['Current medications', '2 active', 'Amlodipine, Salbutamol'],
+    ['Allergies', 'Penicillin, Sulpha', 'Shown when sharing'],
+    ['Emergency contact', 'John Tembo', '+260 966 222 111'],
+    ['Latest 5 records', 'Visits, labs, imaging', 'Synced where consent is available'],
+    ['SmartCare Folder', 'National EHR', 'Retrieve visits, labs, prescriptions and referrals'],
+  ];
+
   return (
     <section className="space-y-5">
       <SectionHeader title="My Medical Profile" subtitle="Secure health profile with MedSearch Health ID, vitals, medicines, records, emergency contact and SmartCare folder." />
@@ -997,14 +1131,20 @@ function MedicalProfile() {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {[
-          ['Last BP check', '128/82 mmHg', '25 May 2026'],
-          ['Current medications', '2 active', 'Amlodipine, Salbutamol'],
-          ['Allergies', 'Penicillin, Sulpha', 'Shown when sharing'],
-          ['Emergency contact', 'John Tembo', '+260 966 222 111'],
-          ['Latest 5 records', 'Visits, labs, imaging', 'Synced where consent is available'],
-          ['SmartCare Folder', 'National EHR', 'Retrieve visits, labs, prescriptions and referrals'],
-        ].map(([title, value, detail]) => <InfoTile key={title} label={title} value={value} detail={detail} />)}
+        {profileTiles.map(([title, value, detail]) => (
+          <button
+            className="text-left"
+            key={title}
+            onClick={() => onOpenAction({
+              title,
+              subtitle: value,
+              items: [detail, 'PIN or biometric check required for sensitive data', 'Share with provider only after patient consent.'],
+              primaryAction: title.includes('SmartCare') ? 'Request SmartCare sync' : 'Open details',
+            })}
+          >
+            <InfoTile label={title} value={value} detail={detail} />
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -1015,11 +1155,13 @@ function Accounts({
   loggedInAccount,
   onAccountTypeChange,
   onLogin,
+  onOpenAction,
 }: {
   accountType: AccountType;
   loggedInAccount: AccountType | null;
   onAccountTypeChange: (type: AccountType) => void;
   onLogin: (type: AccountType) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const selected = accounts.find((account) => account.id === accountType) ?? accounts[0];
   const Icon = selected.icon;
@@ -1062,12 +1204,12 @@ function Accounts({
           Continue as {selected.title}
         </button>
       </article>
-      {loggedInAccount && <RoleWorkspace accountType={loggedInAccount} />}
+      {loggedInAccount && <RoleWorkspace accountType={loggedInAccount} onOpenAction={onOpenAction} />}
     </section>
   );
 }
 
-function RoleWorkspace({ accountType }: { accountType: AccountType }) {
+function RoleWorkspace({ accountType, onOpenAction }: { accountType: AccountType; onOpenAction: (panel: ActionPanelContent) => void }) {
   const workspaces = {
     patient: {
       title: 'Patient workspace',
@@ -1114,27 +1256,73 @@ function RoleWorkspace({ accountType }: { accountType: AccountType }) {
         ))}
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <InfoList title="Workspace actions" items={workspace.actions} />
+        <div className="rounded-2xl bg-slate-50 p-4">
+          <h4 className="font-black text-slate-950">Workspace actions</h4>
+          <div className="mt-3 grid gap-2">
+            {workspace.actions.map((item) => (
+              <button
+                className="flex items-center justify-between rounded-2xl bg-white p-3 text-left text-sm font-bold text-slate-700"
+                key={item}
+                onClick={() => onOpenAction({
+                  title: item,
+                  subtitle: `${workspace.title} action window.`,
+                  items: ['Open action workspace', 'Show relevant records, forms or approvals', 'Save changes to the correct account role.'],
+                  primaryAction: 'Open',
+                })}
+              >
+                {item}
+                <ChevronRight size={16} />
+              </button>
+            ))}
+          </div>
+        </div>
         <InfoList title="Controls and limits" items={workspace.restricted} />
       </div>
     </article>
   );
 }
 
-function AppointmentCard({ facility }: { facility: Facility }) {
+function AppointmentCard({ facility, onOpenAction }: { facility: Facility; onOpenAction: (panel: ActionPanelContent) => void }) {
+  const [selectedDate, setSelectedDate] = useState('Today');
+  const [selectedTime, setSelectedTime] = useState('09:00');
+
   return (
     <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
       <h3 className="text-lg font-black">Book appointment at {facility.name}</h3>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        {['Today', 'Tomorrow', 'Friday'].map((date) => <button className="rounded-2xl bg-slate-50 p-3 font-bold" key={date}>{date}</button>)}
-        {['09:00', '11:30', '14:00'].map((time) => <button className="rounded-2xl bg-[#EAF8F8] p-3 font-bold text-[#087D7D]" key={time}>{time}</button>)}
+        {['Today', 'Tomorrow', 'Friday'].map((date) => (
+          <button className={`rounded-2xl p-3 font-bold ${selectedDate === date ? 'bg-[#1AA6A6] text-white' : 'bg-slate-50'}`} key={date} onClick={() => setSelectedDate(date)}>{date}</button>
+        ))}
+        {['09:00', '11:30', '14:00'].map((time) => (
+          <button className={`rounded-2xl p-3 font-bold ${selectedTime === time ? 'bg-[#1AA6A6] text-white' : 'bg-[#EAF8F8] text-[#087D7D]'}`} key={time} onClick={() => setSelectedTime(time)}>{time}</button>
+        ))}
       </div>
-      <button className="mt-4 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white">Confirm booking</button>
+      <button
+        className="mt-4 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white"
+        onClick={() => onOpenAction({
+          title: 'Confirm booking',
+          subtitle: `${facility.name} - ${selectedDate} at ${selectedTime}`,
+          items: ['Patient confirms appointment details', 'Facility receives booking request', 'Reminder notification scheduled.'],
+          primaryAction: 'Confirm appointment',
+        })}
+      >
+        Confirm booking
+      </button>
     </article>
   );
 }
 
-function CartPanel({ cart, total, onUpdateCart }: { cart: CartItem[]; total: number; onUpdateCart: (medicineId: string, amount: number) => void }) {
+function CartPanel({
+  cart,
+  total,
+  onUpdateCart,
+  onOpenAction,
+}: {
+  cart: CartItem[];
+  total: number;
+  onUpdateCart: (medicineId: string, amount: number) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
+}) {
   return (
     <section className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -1165,7 +1353,17 @@ function CartPanel({ cart, total, onUpdateCart }: { cart: CartItem[]; total: num
             <span>Total</span>
             <span>ZMW {total}</span>
           </div>
-          <button className="w-full rounded-full bg-[#1AA6A6] px-4 py-3 font-bold text-white">Proceed to checkout</button>
+          <button
+            className="w-full rounded-full bg-[#1AA6A6] px-4 py-3 font-bold text-white"
+            onClick={() => onOpenAction({
+              title: 'Checkout',
+              subtitle: `Total: ZMW ${total}`,
+              items: ['Choose delivery or pickup', 'Upload prescription if required', 'Select payment method', 'Confirm order before submission.'],
+              primaryAction: 'Place order',
+            })}
+          >
+            Proceed to checkout
+          </button>
         </div>
       )}
     </section>
@@ -1233,6 +1431,36 @@ function OrdersSnapshot({ toast }: { toast: string }) {
   );
 }
 
+function ActionPanel({ panel, onClose }: { panel: ActionPanelContent; onClose: () => void }) {
+  return (
+    <section className="mt-6 rounded-[28px] border border-teal-100 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-[#087D7D]">Next window</p>
+          <h2 className="mt-1 text-2xl font-black text-slate-950">{panel.title}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{panel.subtitle}</p>
+        </div>
+        <button className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-600" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {panel.items.map((item) => (
+          <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-700" key={item}>
+            <BadgeCheck size={18} color={primary} />
+            {item}
+          </div>
+        ))}
+      </div>
+      {panel.primaryAction && (
+        <button className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white" onClick={onClose}>
+          {panel.primaryAction}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div>
@@ -1275,13 +1503,13 @@ function InfoTile({ label, value, detail }: { label: string; value: string; deta
   );
 }
 
-function PillTag({ children }: { children: React.ReactNode }) {
+function PillTag({ children }: { children: ReactNode }) {
   return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{children}</span>;
 }
 
-function ActionButton({ icon: Icon, label }: { icon: typeof MapPin; label: string }) {
+function ActionButton({ icon: Icon, label, onClick }: { icon: typeof MapPin; label: string; onClick: () => void }) {
   return (
-    <button className="inline-flex items-center justify-center gap-2 rounded-full bg-[#EAF8F8] px-4 py-2 text-sm font-bold text-[#087D7D]">
+    <button className="inline-flex items-center justify-center gap-2 rounded-full bg-[#EAF8F8] px-4 py-2 text-sm font-bold text-[#087D7D]" onClick={onClick}>
       <Icon size={16} />
       {label}
     </button>
