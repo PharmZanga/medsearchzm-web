@@ -806,7 +806,7 @@ function PharmacyModule({
       />
       <FacilityCards title="Nearby pharmacies" facilities={filteredPharmacies} onSelectFacility={onSelectFacility} onOpenFacility={onOpenFacility} />
       <FacilityProfile facility={activeFacility} onOpenAction={onOpenAction} />
-      <Inventory title={`${activeFacility.name} medicines in stock`} medicines={inventory} onAddToCart={onAddToCart} />
+      <Inventory title={`${activeFacility.name} medicines in stock`} medicines={inventory} onAddToCart={onAddToCart} onOpenAction={onOpenAction} />
     </section>
   );
 }
@@ -963,6 +963,7 @@ function FacilityCards({
 }
 
 function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpenAction: (panel: ActionPanelContent) => void }) {
+  const inventory = medicines.filter((medicine) => medicine.pharmacies.includes(facility.id));
   const actionPanels = {
     call: {
       title: `Call ${facility.name}?`,
@@ -994,7 +995,74 @@ function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpe
       items: ['Upload photo or PDF', 'Pharmacist reviews medicine request', 'User receives chat update when approved.'],
       primaryAction: 'Upload prescription',
     },
+    whatsapp: {
+      title: `WhatsApp ${facility.name}`,
+      subtitle: 'Open a prepared WhatsApp message for direct support.',
+      items: [`WhatsApp number: ${facility.phone}`, `Message: Hello ${facility.name}, I found you on MedSearch Zambia and would like assistance.`, 'External WhatsApp opening is optional; the app keeps in-app chat available.'],
+      primaryAction: 'Open WhatsApp',
+    },
+    share: {
+      title: `Share ${facility.name}`,
+      subtitle: 'Share this provider profile with a patient, caregiver or family member.',
+      items: [`Provider: ${facility.name}`, `${facility.distance} away`, `${facility.status} · ${facility.hours}`],
+      primaryAction: 'Share profile',
+    },
   } satisfies Record<string, ActionPanelContent>;
+
+  const profileWindows = [
+    {
+      title: 'Services Offered',
+      subtitle: `Patient services at ${facility.name}`,
+      items: facility.services.map((service) => `${service} · Available`),
+      primaryAction: 'Book service',
+    },
+    {
+      title: 'Contact Details',
+      subtitle: 'One-tap contact options.',
+      items: [`Phone: ${facility.phone}`, `WhatsApp: ${facility.phone}`, 'Email: support@medsearch.co.zm', 'After-hours line shown when available.'],
+      primaryAction: 'Contact provider',
+    },
+    {
+      title: 'Map and Navigation',
+      subtitle: 'In-app movement guidance from your current location.',
+      items: [`Distance remaining: ${facility.distance}`, 'Walking route available', 'Driving route available', 'Motorcycle route available', `Turn-by-turn directions to ${facility.name}.`],
+      primaryAction: 'Start navigation',
+    },
+    {
+      title: facility.type === 'Pharmacy' ? 'Medicines In Stock' : 'Services and Departments',
+      subtitle: facility.type === 'Pharmacy' ? 'Search medicines, compare stock and order.' : 'Clinical services and departments available.',
+      items: inventory.length
+        ? inventory.map((medicine) => `${medicine.name} · ZMW ${medicine.price} · ${medicine.stock} packs`)
+        : facility.services.map((service) => `${service} · Open for patient request`),
+      primaryAction: facility.type === 'Pharmacy' ? 'Open inventory' : 'View departments',
+    },
+    {
+      title: 'Prices',
+      subtitle: 'Transparent patient-facing costs.',
+      items: ['Consultation/service price range shown before booking', 'Insurance and NHIMA support shown where available', 'Generic vs brand pricing visible for medicines.'],
+      primaryAction: 'View prices',
+    },
+    {
+      title: 'Delivery System',
+      subtitle: facility.delivery ? 'Delivery is available for this provider.' : 'Delivery options depend on this provider.',
+      items: facility.delivery
+        ? ['Delivery fee from ZMW 20', 'Estimated arrival: 45-90 minutes', 'Prescription upload required where needed', 'Driver tracking appears inside MedSearch.']
+        : ['Pickup available', 'Delivery request can be sent if provider enables it', 'User receives confirmation before order.'],
+      primaryAction: 'Open delivery',
+    },
+    {
+      title: 'Operational Time',
+      subtitle: `${facility.status} · ${facility.hours}`,
+      items: [`Today: ${facility.hours}`, 'Weekend hours shown where available', 'Public holiday closure notices appear here.'],
+      primaryAction: 'View hours',
+    },
+    {
+      title: 'Patient Rating',
+      subtitle: `${facility.rating}/5 patient rating`,
+      items: ['Fast service', 'Friendly staff', 'Verified patient reviews only', 'Report issue option available.'],
+      primaryAction: 'View reviews',
+    },
+  ] satisfies ActionPanelContent[];
 
   return (
     <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
@@ -1009,28 +1077,51 @@ function FacilityProfile({ facility, onOpenAction }: { facility: Facility; onOpe
           {facility.delivery && <PillTag>Delivery available</PillTag>}
         </div>
       </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-5">
+      <div className="mt-5 grid gap-3 md:grid-cols-4 lg:grid-cols-7">
         <ActionButton icon={Phone} label="Call" onClick={() => onOpenAction(actionPanels.call)} />
         <ActionButton icon={MessageCircle} label="Chat" onClick={() => onOpenAction(actionPanels.chat)} />
+        <ActionButton icon={MessageCircle} label="WhatsApp" onClick={() => onOpenAction(actionPanels.whatsapp)} />
         <ActionButton icon={MapPin} label="Directions" onClick={() => onOpenAction(actionPanels.directions)} />
         <ActionButton icon={CalendarDays} label="Book" onClick={() => onOpenAction(actionPanels.book)} />
         <ActionButton icon={Upload} label="Upload Rx" onClick={() => onOpenAction(actionPanels.rx)} />
+        <ActionButton icon={ChevronRight} label="Share" onClick={() => onOpenAction(actionPanels.share)} />
       </div>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <InfoList title="Services offered" items={facility.services} />
-        <InfoList title="Map and movement" items={[`${facility.distance} from current location`, 'Walking route available', 'Driving route available', 'Open in Google Maps optional']} />
+      <div className="mt-5">
+        <h3 className="text-lg font-black text-slate-950">Choose one option</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {profileWindows.map((panel) => (
+            <button
+              className="rounded-2xl bg-slate-50 p-4 text-left transition hover:bg-[#EAF8F8]"
+              key={panel.title}
+              onClick={() => onOpenAction(panel)}
+            >
+              <strong className="text-slate-950">{panel.title}</strong>
+              <p className="mt-1 text-sm text-slate-600">{panel.subtitle}</p>
+            </button>
+          ))}
+        </div>
       </div>
     </article>
   );
 }
 
-function Inventory({ title, medicines, onAddToCart }: { title: string; medicines: Medicine[]; onAddToCart: (id: string) => void }) {
+function Inventory({
+  title,
+  medicines,
+  onAddToCart,
+  onOpenAction,
+}: {
+  title: string;
+  medicines: Medicine[];
+  onAddToCart: (id: string) => void;
+  onOpenAction: (panel: ActionPanelContent) => void;
+}) {
   return (
     <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
       <h3 className="mb-4 text-lg font-black text-slate-950">{title}</h3>
       <div className="grid gap-4 md:grid-cols-2">
         {medicines.map((medicine) => (
-          <MedicineCard medicine={medicine} key={medicine.id} onAddToCart={onAddToCart} />
+          <MedicineCard medicine={medicine} key={medicine.id} onAddToCart={onAddToCart} onOpenAction={onOpenAction} />
         ))}
       </div>
     </article>
@@ -1074,7 +1165,7 @@ function Medicines({
             onSelectMedicine(medicine.id);
             onOpenMedicine(medicine);
           }}>
-            <MedicineCard medicine={medicine} onAddToCart={onAddToCart} />
+            <MedicineCard medicine={medicine} onAddToCart={onAddToCart} onOpenAction={onOpenAction} />
           </button>
         ))}
       </div>
@@ -1106,7 +1197,15 @@ function Medicines({
           ))}
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
-          <button className="rounded-full bg-[#1AA6A6] px-5 py-3 font-bold text-white" onClick={() => onAddToCart(selectedMedicine.id)}>
+          <button className="rounded-full bg-[#1AA6A6] px-5 py-3 font-bold text-white" onClick={() => {
+            onAddToCart(selectedMedicine.id);
+            onOpenAction({
+              title: `${selectedMedicine.name} added to cart`,
+              subtitle: 'Cart confirmation window.',
+              items: [`Medicine: ${selectedMedicine.name}`, `Price: ZMW ${selectedMedicine.price}`, 'Quantity and delivery can be adjusted before checkout.'],
+              primaryAction: 'Open cart',
+            });
+          }}>
             Add to Cart
           </button>
           <button
@@ -1126,7 +1225,15 @@ function Medicines({
   );
 }
 
-function MedicineCard({ medicine, onAddToCart }: { medicine: Medicine; onAddToCart: (id: string) => void }) {
+function MedicineCard({
+  medicine,
+  onAddToCart,
+  onOpenAction,
+}: {
+  medicine: Medicine;
+  onAddToCart: (id: string) => void;
+  onOpenAction?: (panel: ActionPanelContent) => void;
+}) {
   return (
     <article className="h-full rounded-3xl border border-teal-100 bg-white p-5 shadow-sm">
       <div className="flex gap-4">
@@ -1146,7 +1253,18 @@ function MedicineCard({ medicine, onAddToCart }: { medicine: Medicine; onAddToCa
           {medicine.prescription ? 'Prescription Required' : 'Available'}
         </span>
       </div>
-      <button className="mt-4 w-full rounded-full bg-[#1AA6A6] px-4 py-3 font-bold text-white" onClick={(event) => { event.stopPropagation(); onAddToCart(medicine.id); }}>
+      <button className="mt-4 w-full rounded-full bg-[#1AA6A6] px-4 py-3 font-bold text-white" onClick={(event) => {
+        event.stopPropagation();
+        onAddToCart(medicine.id);
+        onOpenAction?.({
+          title: medicine.prescription ? `Upload prescription for ${medicine.name}` : `${medicine.name} added to cart`,
+          subtitle: medicine.prescription ? 'Prescription review window.' : 'Cart confirmation window.',
+          items: medicine.prescription
+            ? ['Upload prescription photo or PDF', 'Pharmacist reviews before checkout', 'Chat opens after review if clarification is needed.']
+            : [`Medicine: ${medicine.name}`, `Price: ZMW ${medicine.price}`, 'Quantity can be adjusted in the cart.'],
+          primaryAction: medicine.prescription ? 'Upload prescription' : 'Open cart',
+        });
+      }}>
         {medicine.prescription ? 'Upload Prescription' : 'Add to Cart'}
       </button>
     </article>
@@ -1450,6 +1568,16 @@ function Accounts({
             onClick={() => {
               onAccountTypeChange(account.id);
               onLogin(account.id);
+              onOpenAction({
+                title: `${account.title} login preview`,
+                subtitle: account.summary,
+                items: [
+                  `Registration fields: ${account.fields.join(', ')}`,
+                  `Allowed actions: ${account.permissions.join(', ')}`,
+                  account.id === 'patient' ? 'Public users can browse, book, buy OTC medicines and comment.' : 'Verification is required before provider-facing features go live.',
+                ],
+                primaryAction: `Continue as ${account.title}`,
+              });
             }}
           >
             <account.icon className="text-[#087D7D]" size={28} />
@@ -1473,7 +1601,15 @@ function Accounts({
           <InfoList title="Registration fields" items={selected.fields} />
           <InfoList title="Allowed actions" items={selected.permissions} />
         </div>
-        <button className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white" onClick={() => onLogin(selected.id)}>
+        <button className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white" onClick={() => {
+          onLogin(selected.id);
+          onOpenAction({
+            title: `${selected.title} session opened`,
+            subtitle: 'Demo account workspace is now active.',
+            items: ['Role-based menu is loaded', 'Permissions are applied for this account type', 'Next clicks open the relevant module or role window.'],
+            primaryAction: 'Open workspace',
+          });
+        }}>
           Continue as {selected.title}
         </button>
       </article>
@@ -1601,10 +1737,26 @@ function AppointmentCard({ facility, onOpenAction }: { facility: Facility; onOpe
       <h3 className="text-lg font-black">Book appointment at {facility.name}</h3>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         {['Today', 'Tomorrow', 'Friday'].map((date) => (
-          <button className={`rounded-2xl p-3 font-bold ${selectedDate === date ? 'bg-[#1AA6A6] text-white' : 'bg-slate-50'}`} key={date} onClick={() => setSelectedDate(date)}>{date}</button>
+          <button className={`rounded-2xl p-3 font-bold ${selectedDate === date ? 'bg-[#1AA6A6] text-white' : 'bg-slate-50'}`} key={date} onClick={() => {
+            setSelectedDate(date);
+            onOpenAction({
+              title: `Booking date selected`,
+              subtitle: `${facility.name} · ${date}`,
+              items: ['Choose a time next', 'Patient can still change the date before confirmation', 'Facility receives booking only after final confirmation.'],
+              primaryAction: 'Continue',
+            });
+          }}>{date}</button>
         ))}
         {['09:00', '11:30', '14:00'].map((time) => (
-          <button className={`rounded-2xl p-3 font-bold ${selectedTime === time ? 'bg-[#1AA6A6] text-white' : 'bg-[#EAF8F8] text-[#087D7D]'}`} key={time} onClick={() => setSelectedTime(time)}>{time}</button>
+          <button className={`rounded-2xl p-3 font-bold ${selectedTime === time ? 'bg-[#1AA6A6] text-white' : 'bg-[#EAF8F8] text-[#087D7D]'}`} key={time} onClick={() => {
+            setSelectedTime(time);
+            onOpenAction({
+              title: `Booking time selected`,
+              subtitle: `${facility.name} · ${selectedDate} at ${time}`,
+              items: ['Review appointment details', 'Confirm before sending to facility', 'Reminder notification appears after confirmation.'],
+              primaryAction: 'Review booking',
+            });
+          }}>{time}</button>
         ))}
       </div>
       <button
