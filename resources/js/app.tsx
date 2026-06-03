@@ -415,6 +415,23 @@ function App() {
     });
   }
 
+  function openMedicineWindow(medicine: Medicine) {
+    setSelectedMedicineId(medicine.id);
+    const stockFacilities = facilities.filter((facility) => medicine.pharmacies.includes(facility.id));
+    openAction({
+      title: `${medicine.name} details`,
+      subtitle: `${medicine.brand} · ${medicine.generic} · ${medicine.category} · ZMW ${medicine.price}`,
+      items: [
+        `Photo: ${medicine.brand} ${medicine.name} pack image placeholder`,
+        `Description: ${medicine.description}`,
+        `Dosage: ${medicine.dosage}`,
+        medicine.prescription ? 'Prescription required before checkout or delivery' : 'Available for OTC purchase',
+        `Nearby pharmacies with stock: ${stockFacilities.map((facility) => `${facility.name} (${facility.distance})`).join(', ')}`,
+      ],
+      primaryAction: medicine.prescription ? 'Upload prescription' : 'Add to cart',
+    });
+  }
+
   function addToCart(medicineId: string) {
     setCart((items) => {
       const current = items.find((item) => item.medicineId === medicineId);
@@ -489,6 +506,7 @@ function App() {
           onSelectService={setSelectedService}
           onSelectFacility={setSelectedFacilityId}
           onNavigate={navigate}
+          onOpenFacility={openFacilityWindow}
           onOpenAction={openAction}
         />
       );
@@ -502,6 +520,7 @@ function App() {
           onSelectMedicine={setSelectedMedicineId}
           onAddToCart={addToCart}
           onNavigate={navigate}
+          onOpenMedicine={openMedicineWindow}
           onOpenAction={openAction}
         />
       );
@@ -1024,6 +1043,7 @@ function Medicines({
   onSelectMedicine,
   onAddToCart,
   onNavigate,
+  onOpenMedicine,
   onOpenAction,
 }: {
   medicines: Medicine[];
@@ -1031,6 +1051,7 @@ function Medicines({
   onSelectMedicine: (id: string) => void;
   onAddToCart: (id: string) => void;
   onNavigate: (module: ModuleId) => void;
+  onOpenMedicine: (medicine: Medicine) => void;
   onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const categories = ['All', ...Array.from(new Set(medicines.map((medicine) => medicine.category)))];
@@ -1049,7 +1070,10 @@ function Medicines({
       <FilterRow values={brands} active={brand} onChange={setBrand} />
       <div className="grid gap-4 md:grid-cols-2">
         {visibleMedicines.map((medicine) => (
-          <button className="text-left" key={medicine.id} onClick={() => onSelectMedicine(medicine.id)}>
+          <button className="text-left" key={medicine.id} onClick={() => {
+            onSelectMedicine(medicine.id);
+            onOpenMedicine(medicine);
+          }}>
             <MedicineCard medicine={medicine} onAddToCart={onAddToCart} />
           </button>
         ))}
@@ -1065,7 +1089,17 @@ function Medicines({
         <h4 className="mt-5 font-black">Pharmacies with stock</h4>
         <div className="mt-3 grid gap-3">
           {stockFacilities.map((facility) => (
-            <button className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 text-left" key={facility.id} onClick={() => onNavigate('pharmacy')}>
+            <button className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 text-left" key={facility.id} onClick={() => onOpenAction({
+              title: `${facility.name} stock window`,
+              subtitle: `${selectedMedicine.name} is available at ${facility.name}.`,
+              items: [
+                `${facility.distance} away · ${facility.status}`,
+                `Price: ZMW ${selectedMedicine.price}`,
+                `Stock: ${selectedMedicine.stock} packs in catalogue`,
+                'Next action can open pharmacy profile, directions, chat or checkout.',
+              ],
+              primaryAction: 'Open pharmacy profile',
+            })}>
               <span><strong>{facility.name}</strong><br /><small>{facility.distance} · {facility.status}</small></span>
               <ChevronRight size={18} />
             </button>
@@ -1124,12 +1158,14 @@ function Services({
   onSelectService,
   onSelectFacility,
   onNavigate,
+  onOpenFacility,
   onOpenAction,
 }: {
   selectedService: string;
   onSelectService: (service: string) => void;
   onSelectFacility: (id: string) => void;
   onNavigate: (module: ModuleId) => void;
+  onOpenFacility: (facility: Facility) => void;
   onOpenAction: (panel: ActionPanelContent) => void;
 }) {
   const selected = selectedService.toLowerCase();
@@ -1189,7 +1225,10 @@ function Services({
         <p className="mt-2 text-sm text-slate-600">Price varies by facility. Tap a facility to open its profile.</p>
         <div className="mt-4 grid gap-3">
           {offeringFacilities.slice(0, 4).map((facility) => (
-            <button className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 text-left" key={facility.id} onClick={() => { onSelectFacility(facility.id); onNavigate(facility.type === 'Pharmacy' ? 'pharmacy' : 'hospitals'); }}>
+            <button className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 text-left" key={facility.id} onClick={() => {
+              onSelectFacility(facility.id);
+              onOpenFacility(facility);
+            }}>
               <span><strong>{facility.name}</strong><br /><small>{facility.distance} · {facility.rating}/5 · {facility.status}</small></span>
               <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#087D7D]">Book</span>
             </button>
@@ -1207,12 +1246,45 @@ function Community({ activeTab, onTabChange, onOpenAction }: { activeTab: string
     ['Managing Hypertension', 'Dr. Mwansa', 'Live Q&A Friday 19:00', '58 Likes', '20 Comments'],
   ];
   const tabs = ['Feed', 'Health Questions', 'Videos', 'Groups', 'Events', 'Alerts'];
+  const questionCards = [
+    ['Where can I find insulin near me?', 'Answered by 2 verified pharmacists', 'Fine Pharmacy and Medlink Pharmacy have insulin in stock.'],
+    ['Is cough syrup safe during pregnancy?', 'Waiting for verified answer', 'A pharmacist or doctor should review the exact product first.'],
+    ['Which hospital has X-ray today?', 'Answered by Medsearch Partner Hospital', 'X-ray is available today from 08:00 to 18:00.'],
+  ];
+  const eventCards = [
+    ['Free Cervical Cancer Screening', 'UTH Women & Newborn Hospital · June 12', 'Register'],
+    ['Ask a Pharmacist Live Q&A', 'Fine Pharmacy · Friday 19:00', 'Join Session'],
+    ['Blood Pressure Awareness Week', 'Lusaka clinics · July 20', 'Attend'],
+  ];
+  const alertCards = [
+    ['Cholera Alert', 'New prevention guidance for selected Lusaka communities', 'View alert'],
+    ['Medicine Recall Notice', 'Check product batch before use', 'Check batch'],
+    ['Malaria Surge', 'Find testing and treatment facilities near you', 'Find services'],
+  ];
 
   return (
     <section className="space-y-5">
       <SectionHeader title="Healthcare Community" subtitle="A healthcare social network for trusted posts, comments, videos, groups, events and alerts." />
       <FilterRow values={tabs} active={activeTab} onChange={onTabChange} />
-      {activeTab === 'Groups' ? (
+      {activeTab === 'Health Questions' ? (
+        <div className="grid gap-4">
+          {questionCards.map(([question, status, answer]) => (
+            <button
+              className="rounded-3xl border border-teal-100 bg-white p-5 text-left shadow-sm hover:border-[#1AA6A6]"
+              key={question}
+              onClick={() => onOpenAction({
+                title: question,
+                subtitle: status,
+                items: [answer, 'Only verified health workers and facilities can answer as providers.', 'Patients can like, comment, save and follow the provider.'],
+                primaryAction: 'Open answers',
+              })}
+            >
+              <h3 className="text-lg font-black text-slate-950">{question}</h3>
+              <p className="mt-2 text-sm text-slate-600">{status}</p>
+            </button>
+          ))}
+        </div>
+      ) : activeTab === 'Groups' ? (
         <div className="grid gap-4 md:grid-cols-2">
           {['Diabetes Community', 'Hypertension Community', 'Maternal Health Community', 'Mental Health Community'].map((group, index) => (
             <article className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm" key={group}>
@@ -1230,6 +1302,44 @@ function Community({ activeTab, onTabChange, onOpenAction }: { activeTab: string
                 Join Group
               </button>
             </article>
+          ))}
+        </div>
+      ) : activeTab === 'Events' ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {eventCards.map(([title, detail, action]) => (
+            <button
+              className="rounded-3xl border border-teal-100 bg-white p-5 text-left shadow-sm hover:border-[#1AA6A6]"
+              key={title}
+              onClick={() => onOpenAction({
+                title,
+                subtitle: detail,
+                items: ['Calendar reminder available', 'Location and provider profile can be opened', 'Registration confirmation appears before saving.'],
+                primaryAction: action,
+              })}
+            >
+              <CalendarDays className="text-[#087D7D]" size={26} />
+              <h3 className="mt-3 text-lg font-black text-slate-950">{title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{detail}</p>
+            </button>
+          ))}
+        </div>
+      ) : activeTab === 'Alerts' ? (
+        <div className="grid gap-4">
+          {alertCards.map(([title, detail, action]) => (
+            <button
+              className="rounded-3xl border border-orange-100 bg-white p-5 text-left shadow-sm hover:border-[#FF8A00]"
+              key={title}
+              onClick={() => onOpenAction({
+                title,
+                subtitle: detail,
+                items: ['Location-based public health notice', 'Trusted provider guidance only', 'Nearby services and saved notification options available.'],
+                primaryAction: action,
+              })}
+            >
+              <p className="text-sm font-black uppercase tracking-wide text-[#FF8A00]">Health alert</p>
+              <h3 className="mt-2 text-lg font-black text-slate-950">{title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{detail}</p>
+            </button>
           ))}
         </div>
       ) : (
@@ -1457,7 +1567,7 @@ function RoleWorkspace({
                 className="flex items-center justify-between rounded-2xl bg-white p-3 text-left text-sm font-bold text-slate-700"
                 key={item}
                 onClick={() => {
-                  const route = routeForAction(item);
+                  const route = accountType === 'patient' ? routeForAction(item) : null;
                   if (route) {
                     onNavigate(route);
                     return;
