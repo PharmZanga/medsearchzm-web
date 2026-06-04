@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MedSearch Zambia Agent</title>
+  <style>
+    :root {
+      --teal: #1AA6A6;
+      --mint: #EAF8F8;
+      --orange: #FF8A00;
+      --ink: #102026;
+      --muted: #64747b;
+      --line: #d7eeee;
+      --paper: #ffffff;
+      --soft: #f6fbfb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1180px;
+      background: var(--soft);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+      background: var(--paper);
+      padding: 22px;
+    }
+    .brand { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; }
+    .mark {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      background: var(--teal);
+      color: white;
+      font-size: 22px;
+      font-weight: 900;
+    }
+    .brand strong { display: block; font-size: 17px; }
+    .brand span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .nav { display: grid; gap: 8px; }
+    .nav button {
+      border: 0;
+      border-radius: 16px;
+      background: transparent;
+      padding: 13px 14px;
+      text-align: left;
+      color: var(--muted);
+      font-weight: 800;
+    }
+    .nav button.active, .nav button:hover { background: var(--mint); color: var(--teal); }
+    .main { min-width: 0; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.9);
+      padding: 16px 28px;
+      backdrop-filter: blur(12px);
+    }
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 520px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--soft);
+      padding: 12px 14px;
+    }
+    .search input { width: 100%; border: 0; outline: 0; background: transparent; }
+    .content { padding: 28px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      border-radius: 30px;
+      background: var(--teal);
+      color: white;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(26,166,166,.18);
+    }
+    .hero h1 { margin: 8px 0 10px; font-size: 38px; line-height: 1.05; }
+    .hero p { color: rgba(255,255,255,.82); line-height: 1.7; margin: 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255,255,255,.16);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .hero-panel { display: grid; gap: 10px; border-radius: 24px; background: rgba(255,255,255,.12); padding: 14px; }
+    .hero-panel button {
+      border: 0;
+      border-radius: 18px;
+      background: rgba(255,255,255,.16);
+      color: white;
+      padding: 14px;
+      text-align: left;
+      font-weight: 900;
+    }
+    .grid { display: grid; gap: 18px; }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: var(--paper);
+      padding: 22px;
+      box-shadow: 0 10px 30px rgba(16,32,38,.04);
+    }
+    .card h2, .card h3 { margin: 0; }
+    .muted { color: var(--muted); line-height: 1.65; }
+    .metric { font-size: 30px; font-weight: 950; margin-top: 8px; }
+    .btn {
+      border: 0;
+      border-radius: 999px;
+      background: var(--teal);
+      color: white;
+      padding: 11px 16px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .btn.secondary { background: var(--mint); color: var(--teal); }
+    .btn.dark { background: #102026; color: white; }
+    .btn.orange { background: var(--orange); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 16px 0; }
+    .input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+      color: var(--ink);
+      padding: 12px 14px;
+      outline: 0;
+    }
+    textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
+    .post {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--soft);
+      padding: 18px;
+    }
+    .post-head { display: flex; justify-content: space-between; gap: 12px; }
+    .badge {
+      border-radius: 999px;
+      background: var(--mint);
+      color: var(--teal);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .badge.orange { background: #fff2df; color: #a85200; }
+    .badge.green { background: #e9f8ef; color: #16703b; }
+    .badge.red { background: #ffecec; color: #b42318; }
+    .preview {
+      border-radius: 24px;
+      background: white;
+      border: 1px solid #e7eef0;
+      overflow: hidden;
+    }
+    .preview-image {
+      min-height: 190px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #dff5f5, #fff4e8);
+      color: var(--teal);
+      font-size: 42px;
+      font-weight: 900;
+    }
+    .preview-body { padding: 18px; }
+    .timeline { display: grid; gap: 10px; }
+    .timeline div { display: flex; justify-content: space-between; gap: 12px; border-radius: 18px; background: var(--soft); padding: 13px 14px; }
+    .toast {
+      position: fixed;
+      right: 22px;
+      top: 22px;
+      z-index: 30;
+      display: none;
+      max-width: 380px;
+      border-radius: 18px;
+      background: var(--ink);
+      color: white;
+      padding: 14px 16px;
+      font-weight: 800;
+      box-shadow: 0 16px 50px rgba(0,0,0,.18);
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      display: none;
+      background: rgba(16,32,38,.55);
+      padding: 28px;
+    }
+    .modal.open { display: grid; place-items: center; }
+    .modal-box {
+      width: min(920px, 100%);
+      max-height: 90vh;
+      overflow: auto;
+      border-radius: 30px;
+      background: white;
+      padding: 24px;
+    }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+  <div id="modal" class="modal" onclick="closeModal(event)"></div>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">M</div>
+        <div>
+          <strong>MedSearch Agent</strong>
+          <span>Facebook content assistant</span>
+        </div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <label class="search">
+          <span>Search</span>
+          <input id="globalSearch" placeholder="Search posts, campaigns, topics, approvals..." oninput="render()">
+        </label>
+        <div class="toolbar" style="margin:0">
+          <span id="connectionBadge" class="badge orange">Facebook demo mode</span>
+          <button class="btn secondary" onclick="openSettings()">Settings</button>
+          <button class="btn" onclick="openGenerate()">Generate Post</button>
+        </div>
+      </header>
+      <section class="content" id="app"></section>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      page: 'dashboard',
+      tab: 'queue',
+      demoMode: true,
+      connected: false,
+      pageId: '182595140783832',
+      pageName: 'MedSearch Zambia',
+      selectedPost: null,
+      settings: {
+        reviewerRequired: true,
+        defaultLanguage: 'English',
+        publishingMode: 'Demo mode',
+        tone: 'Warm, clear, patient-safe',
+      },
+      posts: [
+        {
+          id: 1,
+          title: 'Find Healthcare Fast',
+          topic: 'Healthcare Access',
+          status: 'pending',
+          date: '2026-06-04',
+          language: 'English',
+          audience: 'Patients and families',
+          body: 'Looking for a nearby pharmacy, hospital or medicine? MedSearch Zambia helps you search, compare and connect with trusted health providers in one place.',
+          imagePrompt: 'Zambian patient using a phone to find a nearby clinic, bright healthcare setting',
+          safety: ['No diagnosis claim', 'No prescription advice', 'Navigation only'],
+          engagement: 0,
+        },
+        {
+          id: 2,
+          title: 'Malaria Prevention Reminder',
+          topic: 'Malaria',
+          status: 'approved',
+          date: '2026-06-03',
+          language: 'English',
+          audience: 'Community health',
+          body: 'Prevent malaria by sleeping under an insecticide-treated net, removing standing water and seeking care early when fever starts. MedSearch can help locate nearby services.',
+          imagePrompt: 'Family using mosquito net in Zambia, public health education photo',
+          safety: ['Public health education', 'Seek care early', 'No dosage advice'],
+          engagement: 124,
+        },
+        {
+          id: 3,
+          title: 'Maternal Health Access',
+          topic: 'Maternal Health',
+          status: 'scheduled',
+          date: '2026-06-05 09:00',
+          language: 'English',
+          audience: 'Expectant mothers',
+          body: 'Antenatal visits help mothers and babies stay safe. Use MedSearch Zambia to find maternal health services, clinics and trusted providers near you.',
+          imagePrompt: 'Zambian nurse supporting pregnant mother at antenatal clinic',
+          safety: ['Encourages clinic visit', 'No medical diagnosis', 'Supportive tone'],
+          engagement: 89,
+        },
+      ],
+      trends: [
+        ['Cholera alerts', 'Emergency updates', '+340%', 'Prepare location-based safety posts'],
+        ['Malaria prevention', 'Public health', '+120%', 'Schedule rainy season reminders'],
+        ['Hypertension checks', 'Chronic care', '+84%', 'Promote BP screening services'],
+        ['Maternal health', 'Women and newborns', '+71%', 'Highlight antenatal service finder'],
+        ['Medicine stock search', 'Pharmacy access', '+62%', 'Explain how to find nearby pharmacies'],
+      ],
+    };
+
+    const navItems = [
+      ['dashboard', 'Dashboard'],
+      ['agent', 'Content Agent'],
+      ['queue', 'Approval Queue'],
+      ['calendar', 'Schedule Calendar'],
+      ['analytics', 'Analytics'],
+      ['settings', 'Facebook Settings'],
+    ];
+
+    function setPage(page) {
+      state.page = page;
+      render();
+    }
+
+    function toast(message) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.style.display = 'block';
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function statusBadge(status) {
+      const cls = status === 'approved' ? 'green' : status === 'rejected' ? 'red' : status === 'scheduled' ? 'orange' : '';
+      return `<span class="badge ${cls}">${status}</span>`;
+    }
+
+    function renderNav() {
+      document.getElementById('nav').innerHTML = navItems.map(([id, label]) => `
+        <button class="${state.page === id ? 'active' : ''}" onclick="setPage('${id}')">${label}</button>
+      `).join('');
+      document.getElementById('connectionBadge').textContent = state.connected ? `Connected: ${state.pageName}` : 'Facebook demo mode';
+      document.getElementById('connectionBadge').className = state.connected ? 'badge green' : 'badge orange';
+    }
+
+    function render() {
+      renderNav();
+      const query = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+      const pages = {
+        dashboard: dashboardView,
+        agent: agentView,
+        queue: () => queueView(query),
+        calendar: calendarView,
+        analytics: analyticsView,
+        settings: settingsView,
+      };
+      document.getElementById('app').innerHTML = (pages[state.page] || dashboardView)();
+    }
+
+    function dashboardView() {
+      const pending = state.posts.filter(p => p.status === 'pending').length;
+      const approved = state.posts.filter(p => p.status === 'approved').length;
+      const scheduled = state.posts.filter(p => p.status === 'scheduled').length;
+      return `
+        <section class="hero">
+          <div>
+            <span class="pill">MedSearch Zambia Agent</span>
+            <h1>Plan, generate, approve and publish trusted health content.</h1>
+            <p>This agent helps the MedSearch team prepare Facebook posts, turn health trends into safe education content, schedule campaigns and keep a review trail before publishing.</p>
+          </div>
+          <div class="hero-panel">
+            <button onclick="openGenerate()">Generate new health post</button>
+            <button onclick="setPage('queue')">Review approval queue</button>
+            <button onclick="setPage('settings')">Connect Facebook page</button>
+          </div>
+        </section>
+        <div class="grid cols-4" style="margin-top:18px">
+          ${metric('Pending review', pending, 'Needs approval')}
+          ${metric('Approved posts', approved, 'Ready to publish')}
+          ${metric('Scheduled posts', scheduled, 'Calendar active')}
+          ${metric('Projected reach', '18.4k', '+24% this month')}
+        </div>
+        <div class="grid cols-2" style="margin-top:18px">
+          <div class="card">
+            <h2>Recommended next actions</h2>
+            <div class="timeline" style="margin-top:14px">
+              <div><strong>Review pending post</strong><button class="btn secondary" onclick="setPage('queue')">Open</button></div>
+              <div><strong>Generate malaria prevention content</strong><button class="btn secondary" onclick="generateFromTopic('Malaria prevention')">Generate</button></div>
+              <div><strong>Connect Facebook production settings</strong><button class="btn secondary" onclick="setPage('settings')">Settings</button></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Trending health topics</h2>
+            <div class="timeline" style="margin-top:14px">
+              ${state.trends.slice(0,4).map(t => `<div><span><strong>${t[0]}</strong><br><small class="muted">${t[1]} · ${t[3]}</small></span><span class="badge">${t[2]}</span></div>`).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function metric(label, value, note) {
+      return `<div class="card"><p class="muted">${label}</p><div class="metric">${value}</div><p class="muted">${note}</p></div>`;
+    }
+
+    function agentView() {
+      return `
+        <div class="grid cols-2">
+          <div class="card">
+            <h2>Content Agent</h2>
+            <p class="muted">Generate patient-safe Facebook posts from MedSearch modules, health campaigns and trending topics.</p>
+            <div class="toolbar">
+              <button class="btn" onclick="openGenerate()">Generate Post</button>
+              <button class="btn secondary" onclick="generateFromTopic('Medicine search awareness')">Medicine search</button>
+              <button class="btn secondary" onclick="generateFromTopic('Ask a pharmacist')">Ask pharmacist</button>
+            </div>
+            <div class="grid">
+              ${state.trends.map(t => `
+                <button class="post" onclick="generateFromTopic('${t[0]}')">
+                  <div class="post-head"><strong>${t[0]}</strong><span class="badge">${t[2]}</span></div>
+                  <p class="muted">${t[3]}</p>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="card">
+            <h2>Agent safety rules</h2>
+            <div class="timeline" style="margin-top:14px">
+              <div><strong>No diagnosis</strong><span class="badge green">Enabled</span></div>
+              <div><strong>No medicine dosage advice</strong><span class="badge green">Enabled</span></div>
+              <div><strong>Human approval before publishing</strong><span class="badge green">Enabled</span></div>
+              <div><strong>Emergency alerts reviewed by admin</strong><span class="badge green">Enabled</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function queueView(query = '') {
+      const posts = state.posts.filter(p => [p.title, p.topic, p.body, p.status].join(' ').toLowerCase().includes(query));
+      return `
+        <div class="card">
+          <div class="post-head">
+            <div>
+              <h2>Approval Queue</h2>
+              <p class="muted">Every generated post is reviewed before it reaches Facebook.</p>
+            </div>
+            <button class="btn" onclick="openGenerate()">Generate Post</button>
+          </div>
+        </div>
+        <div class="grid cols-3">
+          ${posts.map(postCard).join('')}
+        </div>
+      `;
+    }
+
+    function postCard(post) {
+      return `
+        <article class="post">
+          <div class="post-head">
+            <div><strong>${post.title}</strong><p class="muted">${post.topic} · ${post.date}</p></div>
+            ${statusBadge(post.status)}
+          </div>
+          <div class="preview">
+            <div class="preview-image">MZ</div>
+            <div class="preview-body"><p>${post.body}</p></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn secondary" onclick="openPost(${post.id})">Open</button>
+            <button class="btn" onclick="approvePost(${post.id})">Approve</button>
+            <button class="btn orange" onclick="schedulePost(${post.id})">Schedule</button>
+            <button class="btn dark" onclick="publishPost(${post.id})">Publish</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function calendarView() {
+      const scheduled = state.posts.filter(p => p.status === 'scheduled' || p.date.includes(':'));
+      return `
+        <div class="card">
+          <h2>Schedule Calendar</h2>
+          <p class="muted">Plan health education posts around campaigns, outbreaks and MedSearch feature launches.</p>
+        </div>
+        <div class="timeline">
+          ${scheduled.map(p => `<div><span><strong>${p.date}</strong><br><small class="muted">${p.title} · ${p.topic}</small></span><button class="btn secondary" onclick="openPost(${p.id})">Open</button></div>`).join('')}
+        </div>
+      `;
+    }
+
+    function analyticsView() {
+      return `
+        <div class="grid cols-4">
+          ${metric('Reach', '18,420', '+24%')}
+          ${metric('Engagement', '2,184', '+18%')}
+          ${metric('Published posts', '42', '+9')}
+          ${metric('Click-through', '6.8%', '+1.2%')}
+        </div>
+        <div class="grid cols-2" style="margin-top:18px">
+          <div class="card"><h2>Top content themes</h2>${bar('Medicine search', 84)}${bar('Malaria prevention', 77)}${bar('Maternal health', 63)}${bar('Facility finder', 58)}</div>
+          <div class="card"><h2>Performance notes</h2><p class="muted">Posts that include a direct app action such as “Find a nearby pharmacy” perform best. Patient-safety disclaimers reduce moderation risk and improve trust.</p></div>
+        </div>
+      `;
+    }
+
+    function bar(label, value) {
+      return `<div style="margin-top:14px"><div class="post-head"><strong>${label}</strong><span>${value}%</span></div><div style="height:9px;background:var(--mint);border-radius:99px;margin-top:7px"><span style="display:block;width:${value}%;height:9px;background:var(--teal);border-radius:99px"></span></div></div>`;
+    }
+
+    function settingsView() {
+      return `
+        <div class="grid cols-2">
+          <div class="card">
+            <h2>Facebook Settings</h2>
+            <p class="muted">For demo, posting is simulated. In production, Page Access Tokens must live in a secure backend or cloud function.</p>
+            <label>Facebook Page Name<input class="input" id="pageName" value="${state.pageName}"></label><br><br>
+            <label>Facebook Page ID<input class="input" id="pageId" value="${state.pageId}"></label><br><br>
+            <label>Publishing mode
+              <select id="mode" class="input">
+                <option ${state.demoMode ? 'selected' : ''}>Demo mode</option>
+                <option ${!state.demoMode ? 'selected' : ''}>Production backend required</option>
+              </select>
+            </label>
+            <div class="toolbar">
+              <button class="btn" onclick="saveSettings()">Save settings</button>
+              <button class="btn secondary" onclick="connectDemo()">Connect demo page</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Production integration checklist</h2>
+            <div class="timeline" style="margin-top:14px">
+              <div><strong>Meta app configured</strong><span class="badge orange">Required</span></div>
+              <div><strong>Page access token stored server-side</strong><span class="badge orange">Required</span></div>
+              <div><strong>Cloud Function publish endpoint</strong><span class="badge orange">Required</span></div>
+              <div><strong>Human approval workflow</strong><span class="badge green">Included</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openGenerate() {
+      openModal(`
+        <h2>Generate Facebook Post</h2>
+        <p class="muted">Choose a topic and the Agent will draft a patient-safe post for review.</p>
+        <div class="split">
+          <label>Topic<input class="input" id="genTopic" value="Find nearby pharmacies"></label>
+          <label>Language<select class="input" id="genLang"><option>English</option><option>Bemba</option><option>Nyanja</option><option>Tonga</option></select></label>
+        </div><br>
+        <label>Campaign goal<textarea id="genGoal">Help people understand that MedSearch Zambia can help them find medicines, pharmacies and health facilities near them.</textarea></label>
+        <div class="toolbar">
+          <button class="btn" onclick="generatePost()">Generate draft</button>
+          <button class="btn secondary" onclick="closeModal()">Cancel</button>
+        </div>
+      `);
+    }
+
+    function generateFromTopic(topic) {
+      openGenerate();
+      setTimeout(() => {
+        document.getElementById('genTopic').value = topic;
+      }, 0);
+    }
+
+    function generatePost() {
+      const topic = document.getElementById('genTopic').value.trim() || 'Health access';
+      const lang = document.getElementById('genLang').value;
+      const id = Math.max(...state.posts.map(p => p.id)) + 1;
+      const body = `Need help with ${topic.toLowerCase()}? MedSearch Zambia helps you find trusted health services, nearby pharmacies and verified providers. Use the app to search, compare and connect before you travel.`;
+      state.posts.unshift({
+        id,
+        title: topic,
+        topic,
+        status: 'pending',
+        date: new Date().toISOString().slice(0,10),
+        language: lang,
+        audience: 'Public users',
+        body,
+        imagePrompt: `MedSearch Zambia health education image for ${topic}`,
+        safety: ['Navigation support', 'No diagnosis', 'Review required'],
+        engagement: 0,
+      });
+      closeModal();
+      state.page = 'queue';
+      render();
+      toast('Draft generated and added to approval queue.');
+    }
+
+    function openPost(id) {
+      const post = state.posts.find(p => p.id === id);
+      if (!post) return;
+      state.selectedPost = id;
+      openModal(`
+        <div class="post-head">
+          <div><h2>${post.title}</h2><p class="muted">${post.topic} · ${post.language} · ${post.audience}</p></div>
+          ${statusBadge(post.status)}
+        </div>
+        <div class="split" style="margin-top:18px">
+          <div>
+            <label>Post text<textarea id="editBody">${post.body}</textarea></label>
+            <div class="toolbar">
+              <button class="btn" onclick="savePost(${post.id})">Save</button>
+              <button class="btn secondary" onclick="approvePost(${post.id})">Approve</button>
+              <button class="btn orange" onclick="schedulePost(${post.id})">Schedule</button>
+              <button class="btn dark" onclick="publishPost(${post.id})">Publish</button>
+            </div>
+          </div>
+          <div>
+            <div class="preview">
+              <div class="preview-image">MZ</div>
+              <div class="preview-body"><strong>MedSearch Zambia</strong><p>${post.body}</p></div>
+            </div>
+            <div class="card" style="margin-top:12px">
+              <h3>Safety checks</h3>
+              ${post.safety.map(s => `<p class="badge green" style="margin:6px 6px 0 0">${s}</p>`).join('')}
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
+    function savePost(id) {
+      const body = document.getElementById('editBody').value;
+      state.posts = state.posts.map(p => p.id === id ? {...p, body} : p);
+      closeModal();
+      render();
+      toast('Post updated.');
+    }
+
+    function approvePost(id) {
+      state.posts = state.posts.map(p => p.id === id ? {...p, status: 'approved'} : p);
+      closeModal();
+      render();
+      toast('Post approved.');
+    }
+
+    function schedulePost(id) {
+      openModal(`
+        <h2>Schedule Post</h2>
+        <p class="muted">Choose when the approved post should go out.</p>
+        <div class="split">
+          <label>Date<input class="input" type="date" id="schDate" value="${new Date(Date.now()+86400000).toISOString().slice(0,10)}"></label>
+          <label>Time<input class="input" type="time" id="schTime" value="09:00"></label>
+        </div>
+        <div class="toolbar">
+          <button class="btn" onclick="confirmSchedule(${id})">Confirm schedule</button>
+          <button class="btn secondary" onclick="closeModal()">Cancel</button>
+        </div>
+      `);
+    }
+
+    function confirmSchedule(id) {
+      const date = document.getElementById('schDate').value;
+      const time = document.getElementById('schTime').value;
+      state.posts = state.posts.map(p => p.id === id ? {...p, status: 'scheduled', date: `${date} ${time}`} : p);
+      closeModal();
+      render();
+      toast('Post scheduled.');
+    }
+
+    function publishPost(id) {
+      const post = state.posts.find(p => p.id === id);
+      if (!post) return;
+      if (post.status !== 'approved' && post.status !== 'scheduled') {
+        toast('Post must be approved before publishing.');
+        return;
+      }
+      state.posts = state.posts.map(p => p.id === id ? {...p, status: 'published', engagement: p.engagement + 1} : p);
+      closeModal();
+      render();
+      toast(state.demoMode ? 'Demo publish complete. Production will use secure Meta API endpoint.' : 'Publish request sent to backend.');
+    }
+
+    function saveSettings() {
+      state.pageName = document.getElementById('pageName').value.trim() || 'MedSearch Zambia';
+      state.pageId = document.getElementById('pageId').value.trim() || state.pageId;
+      state.demoMode = document.getElementById('mode').value === 'Demo mode';
+      render();
+      toast('Settings saved.');
+    }
+
+    function connectDemo() {
+      state.connected = true;
+      state.demoMode = true;
+      toast('Demo Facebook page connected.');
+      render();
+    }
+
+    function openSettings() {
+      state.page = 'settings';
+      render();
+    }
+
+    function openModal(html) {
+      const modal = document.getElementById('modal');
+      modal.innerHTML = `<div class="modal-box" onclick="event.stopPropagation()">${html}</div>`;
+      modal.classList.add('open');
+    }
+
+    function closeModal(event) {
+      if (event && event.target.id !== 'modal') return;
+      const modal = document.getElementById('modal');
+      modal.classList.remove('open');
+      modal.innerHTML = '';
+    }
+
+    render();
+  </script>
+</body>
+</html>
