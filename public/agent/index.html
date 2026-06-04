@@ -251,6 +251,7 @@
           <input id="globalSearch" placeholder="Search posts, campaigns, topics, approvals..." oninput="render()">
         </label>
         <div class="toolbar" style="margin:0">
+          <span id="aiBadge" class="badge orange">AI endpoint needed</span>
           <span id="connectionBadge" class="badge orange">Facebook demo mode</span>
           <button class="btn secondary" onclick="openSettings()">Settings</button>
           <button class="btn" onclick="openGenerate()">Generate Post</button>
@@ -266,6 +267,7 @@
       tab: 'queue',
       demoMode: true,
       connected: false,
+      aiEndpoint: localStorage.getItem('medsearchAgentAiEndpoint') || '',
       pageId: '182595140783832',
       pageName: 'MedSearch Zambia',
       selectedPost: null,
@@ -358,6 +360,8 @@
       `).join('');
       document.getElementById('connectionBadge').textContent = state.connected ? `Connected: ${state.pageName}` : 'Facebook demo mode';
       document.getElementById('connectionBadge').className = state.connected ? 'badge green' : 'badge orange';
+      document.getElementById('aiBadge').textContent = state.aiEndpoint ? 'AI generation active' : 'AI endpoint needed';
+      document.getElementById('aiBadge').className = state.aiEndpoint ? 'badge green' : 'badge orange';
     }
 
     function render() {
@@ -544,14 +548,24 @@
             </div>
           </div>
           <div class="card">
+            <h2>AI Agent Settings</h2>
+            <p class="muted">Paste your secure AI endpoint URL here. The endpoint receives the topic, language and campaign goal, then returns JSON with post text, title, safety checks and image prompt.</p>
+            <label>AI generation endpoint<input class="input" id="aiEndpoint" placeholder="https://your-worker.example.com/generate" value="${state.aiEndpoint}"></label><br><br>
+            <div class="toolbar">
+              <button class="btn" onclick="saveAiSettings()">Save AI endpoint</button>
+              <button class="btn secondary" onclick="testAiEndpoint()">Test AI</button>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px">
             <h2>Production integration checklist</h2>
             <div class="timeline" style="margin-top:14px">
+              <div><strong>AI endpoint deployed securely</strong><span class="badge orange">Required</span></div>
               <div><strong>Meta app configured</strong><span class="badge orange">Required</span></div>
               <div><strong>Page access token stored server-side</strong><span class="badge orange">Required</span></div>
               <div><strong>Cloud Function publish endpoint</strong><span class="badge orange">Required</span></div>
               <div><strong>Human approval workflow</strong><span class="badge green">Included</span></div>
             </div>
-          </div>
         </div>
       `;
     }
@@ -566,7 +580,7 @@
         </div><br>
         <label>Campaign goal<textarea id="genGoal">Help people understand that MedSearch Zambia can help them find medicines, pharmacies and health facilities near them.</textarea></label>
         <div class="toolbar">
-          <button class="btn" onclick="generatePost()">Generate draft</button>
+          <button class="btn" id="generateBtn" onclick="generatePost()">Generate with AI</button>
           <button class="btn secondary" onclick="closeModal()">Cancel</button>
         </div>
       `);
@@ -579,28 +593,74 @@
       }, 0);
     }
 
-    function generatePost() {
+    async function generatePost() {
       const topic = document.getElementById('genTopic').value.trim() || 'Health access';
       const lang = document.getElementById('genLang').value;
+      const goal = document.getElementById('genGoal').value.trim();
+      const button = document.getElementById('generateBtn');
+      if (!state.aiEndpoint) {
+        closeModal();
+        state.page = 'settings';
+        render();
+        toast('Add a secure AI endpoint first, then generate with real AI.');
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Generating...';
       const id = Math.max(...state.posts.map(p => p.id)) + 1;
-      const body = `Need help with ${topic.toLowerCase()}? MedSearch Zambia helps you find trusted health services, nearby pharmacies and verified providers. Use the app to search, compare and connect before you travel.`;
+      let generated;
+      try {
+        generated = await callAiAgent({ topic, language: lang, goal });
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Generate with AI';
+        toast(error.message || 'AI generation failed.');
+        return;
+      }
       state.posts.unshift({
         id,
-        title: topic,
-        topic,
+        title: generated.title || topic,
+        topic: generated.topic || topic,
         status: 'pending',
         date: new Date().toISOString().slice(0,10),
         language: lang,
-        audience: 'Public users',
-        body,
-        imagePrompt: `MedSearch Zambia health education image for ${topic}`,
-        safety: ['Navigation support', 'No diagnosis', 'Review required'],
+        audience: generated.audience || 'Public users',
+        body: generated.body,
+        imagePrompt: generated.imagePrompt || `MedSearch Zambia health education image for ${topic}`,
+        safety: Array.isArray(generated.safety) ? generated.safety : ['AI generated', 'Human review required', 'Patient-safe wording'],
         engagement: 0,
       });
       closeModal();
       state.page = 'queue';
       render();
-      toast('Draft generated and added to approval queue.');
+      toast('AI draft generated and added to approval queue.');
+    }
+
+    async function callAiAgent(payload) {
+      const response = await fetch(state.aiEndpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          ...payload,
+          brand: 'MedSearch Zambia',
+          channel: 'Facebook',
+          safetyRules: [
+            'Do not diagnose.',
+            'Do not give medicine dosage instructions.',
+            'Encourage users to consult qualified health professionals.',
+            'Keep language clear, warm and useful for Zambia.',
+            'Mention MedSearch only as a navigation and health access platform.',
+          ],
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`AI endpoint returned ${response.status}.`);
+      }
+      const data = await response.json();
+      if (!data.body || data.body.length < 40) {
+        throw new Error('AI response did not include usable post text.');
+      }
+      return data;
     }
 
     function openPost(id) {
@@ -694,6 +754,39 @@
       state.demoMode = document.getElementById('mode').value === 'Demo mode';
       render();
       toast('Settings saved.');
+    }
+
+    function saveAiSettings() {
+      state.aiEndpoint = document.getElementById('aiEndpoint').value.trim();
+      localStorage.setItem('medsearchAgentAiEndpoint', state.aiEndpoint);
+      render();
+      toast(state.aiEndpoint ? 'AI endpoint saved. Generation buttons now use real AI.' : 'AI endpoint cleared.');
+    }
+
+    async function testAiEndpoint() {
+      saveAiSettings();
+      if (!state.aiEndpoint) return;
+      try {
+        const result = await callAiAgent({
+          topic: 'Find nearby pharmacies',
+          language: state.settings.defaultLanguage,
+          goal: 'Test if the MedSearch Zambia Agent can generate patient-safe Facebook content.',
+        });
+        openModal(`
+          <h2>AI Test Result</h2>
+          <p class="muted">Your AI endpoint responded successfully.</p>
+          <div class="preview" style="margin-top:16px">
+            <div class="preview-image">AI</div>
+            <div class="preview-body">
+              <strong>${result.title || 'Generated Post'}</strong>
+              <p>${result.body}</p>
+            </div>
+          </div>
+          <div class="toolbar"><button class="btn" onclick="closeModal()">Done</button></div>
+        `);
+      } catch (error) {
+        toast(error.message || 'AI endpoint test failed.');
+      }
     }
 
     function connectDemo() {
