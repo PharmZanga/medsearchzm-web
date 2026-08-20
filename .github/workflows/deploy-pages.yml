@@ -36,6 +36,12 @@ jobs:
         with:
           enablement: true
 
+      - name: Lint
+        run: npx eslint .
+
+      - name: Type check
+        run: npm run types
+
       - name: Build website
         run: npm run build
 

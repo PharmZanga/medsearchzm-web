@@ -1,20 +1,19 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { resolve } from "node:path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
-    base: '/medsearchzm-web/',
-    plugins: [
-        react(),
-        tailwindcss(),
-    ],
+    // Relative assets work on both the current GitHub Pages project URL and a
+    // future custom domain such as medsearchafrica.com.
+    base: "./",
+    plugins: [react(), tailwindcss()],
     esbuild: {
-        jsx: 'automatic',
+        jsx: "automatic",
     },
     resolve: {
         alias: {
-            '@': resolve(__dirname, './resources/js'),
+            "@": resolve(__dirname, "./resources/js"),
         },
     },
 });
