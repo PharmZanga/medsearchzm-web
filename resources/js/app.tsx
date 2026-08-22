@@ -3309,10 +3309,10 @@ function RoleWorkspace({
             subtitle:
                 "For ordinary users seeking care, medicines, bookings and community access.",
             metrics: [
-                "2 active orders",
-                "4 saved providers",
-                "1 upcoming appointment",
-                "NHIMA active",
+                "Active account",
+                "Profile ready",
+                "No upcoming appointments",
+                "Notifications available",
             ],
             actions: [
                 "Search hospitals",
@@ -3338,10 +3338,10 @@ function RoleWorkspace({
             subtitle:
                 "For verified professionals such as doctors, pharmacists, nurses and clinical officers.",
             metrics: [
-                "Pending verification",
-                "6 bookings",
-                "18 helpful answers",
-                "4.7 rating",
+                "Verification required",
+                "Professional profile available",
+                "Bookings locked until verified",
+                "Public posting locked until verified",
             ],
             actions: [
                 "Update professional profile",
@@ -3361,10 +3361,10 @@ function RoleWorkspace({
             subtitle:
                 "For hospitals, clinics, pharmacies, laboratories and diagnostic centres.",
             metrics: [
-                "Verified provider",
-                "32 medicine orders",
-                "14 appointments today",
-                "ZMW 4,800 revenue",
+                "Verification controls active",
+                "Facility profile available",
+                "Orders unlock after approval",
+                "Analytics unlock after approval",
             ],
             actions: [
                 "Manage facility profile",
@@ -3412,7 +3412,7 @@ function RoleWorkspace({
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="text-sm font-black uppercase tracking-wide text-[#087D7D]">
-                        Logged in demo
+                        Authenticated account
                     </p>
                     <h3 className="mt-1 text-2xl font-black text-slate-950">
                         {workspace.title}
