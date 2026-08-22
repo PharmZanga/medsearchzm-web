@@ -1009,9 +1009,14 @@ function App() {
 function BetaNotice() {
     return (
         <aside className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-950">
-            Public beta: provider listings, prices, stock levels, accounts and
-            transactions on this preview are demonstration data. Do not use this
-            site for emergencies or medical diagnosis.
+            <span className="md:hidden">
+                Public beta · Not for emergencies or medical diagnosis.
+            </span>
+            <span className="hidden md:inline">
+                Public beta: provider listings, prices, stock levels, accounts
+                and transactions on this preview are demonstration data. Do not
+                use this site for emergencies or medical diagnosis.
+            </span>
         </aside>
     );
 }
@@ -1128,8 +1133,8 @@ function AppPage({
         activeModule === "pharmacy" || activeModule === "medicines";
 
     return (
-        <section className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
-            <div className="mb-6 rounded-[28px] border border-teal-100 bg-white p-5 shadow-sm">
+        <section className="mx-auto max-w-7xl px-4 py-4 md:py-6 lg:px-8">
+            <div className="mb-5 rounded-[28px] border border-teal-100 bg-white p-4 shadow-sm md:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                         <button
@@ -1146,20 +1151,25 @@ function AppPage({
                             {moduleLabels[activeModule]}
                         </h1>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            This module now opens as its own web page, matching
-                            the app flow instead of stacking everything on the
-                            home screen.
+                            {activeModule === "accounts"
+                                ? "Create an account, sign in securely and access the correct role-based workspace."
+                                : "This module opens as its own app-style page for focused navigation and actions."}
                         </p>
                     </div>
                     <span className="rounded-full bg-[#FF8A00] px-4 py-2 text-sm font-black text-white">
                         {activeModule === "accounts"
-                            ? "Demo login enabled"
+                            ? "Secure account access"
                             : "App-style page"}
                     </span>
                 </div>
-                <div className="mt-5">
-                    <SearchPanel query={query} onQueryChange={onQueryChange} />
-                </div>
+                {activeModule !== "accounts" && (
+                    <div className="mt-5">
+                        <SearchPanel
+                            query={query}
+                            onQueryChange={onQueryChange}
+                        />
+                    </div>
+                )}
             </div>
             <div
                 className={
