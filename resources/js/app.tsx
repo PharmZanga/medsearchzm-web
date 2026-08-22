@@ -2988,7 +2988,11 @@ function Accounts({
                     )}
                 </article>
             )}
-            <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
+            {authUser?.account_type === "facility" && (
+                <FacilityVerificationForm user={authUser} />
+            )}
+            {!authUser && (
+                <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-3">
                     <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#EAF8F8] text-[#087D7D]">
                         <Icon size={28} />
@@ -3013,7 +3017,8 @@ function Accounts({
                         items={selected.permissions}
                     />
                 </div>
-            </article>
+                </article>
+            )}
             {loggedInAccount && (
                 <RoleWorkspace
                     accountType={loggedInAccount}
@@ -3022,6 +3027,242 @@ function Accounts({
                 />
             )}
         </section>
+    );
+}
+
+function FacilityVerificationForm({ user }: { user: AuthUser }) {
+    const [facilityName, setFacilityName] = useState("");
+    const [facilityType, setFacilityType] = useState("pharmacy");
+    const [licenseNumber, setLicenseNumber] = useState("");
+    const [province, setProvince] = useState("");
+    const [district, setDistrict] = useState("");
+    const [address, setAddress] = useState("");
+    const [phone, setPhone] = useState(user.phone ?? "");
+    const [email, setEmail] = useState(user.email ?? "");
+    const [open24Hours, setOpen24Hours] = useState(false);
+    const [offersDelivery, setOffersDelivery] = useState(false);
+    const [document, setDocument] = useState<File | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [message, setMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
+    const [applicationStatus, setApplicationStatus] = useState("");
+
+    async function submitVerification(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setSubmitting(true);
+        setMessage("");
+        setErrorMessage("");
+
+        const token = sessionStorage.getItem("medsearch_token");
+        if (!token || !document) {
+            setErrorMessage(
+                !token
+                    ? "Please sign in again before submitting."
+                    : "Attach at least one licence or registration document.",
+            );
+            setSubmitting(false);
+            return;
+        }
+
+        const form = new FormData();
+        form.append("name", facilityName);
+        form.append("type", facilityType);
+        form.append("license_number", licenseNumber);
+        form.append("province", province);
+        form.append("district", district);
+        form.append("address", address);
+        form.append("phone", phone);
+        if (email) form.append("email", email);
+        form.append("is_open_24_hours", open24Hours ? "1" : "0");
+        form.append("offers_delivery", offersDelivery ? "1" : "0");
+        form.append(
+            "applicant_notes",
+            "Submitted through the MedSearch Africa facility portal.",
+        );
+        form.append("documents[]", document);
+
+        try {
+            const response = await fetch("/api/v1/facility-verifications", {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: form,
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                const validationMessage = Object.values(
+                    result.errors ?? {},
+                ).flat()[0];
+                throw new Error(
+                    typeof validationMessage === "string"
+                        ? validationMessage
+                        : result.message || "Verification submission failed.",
+                );
+            }
+
+            setMessage(result.message);
+            setApplicationStatus(result.application.status);
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "The verification service could not be reached.",
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    if (applicationStatus) {
+        return (
+            <article className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+                <p className="text-sm font-black uppercase tracking-wide text-amber-800">
+                    Verification submitted
+                </p>
+                <h3 className="mt-2 text-2xl font-black text-slate-950">
+                    {facilityName}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                    {message} Your facility remains private and inactive until
+                    an authorized MedSearch administrator approves the
+                    application.
+                </p>
+                <span className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-amber-800">
+                    Status: {applicationStatus.replaceAll("_", " ")}
+                </span>
+            </article>
+        );
+    }
+
+    return (
+        <form
+            className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm md:p-7"
+            onSubmit={submitVerification}
+        >
+            <div className="mb-5">
+                <p className="text-sm font-black uppercase tracking-wide text-[#087D7D]">
+                    Provider verification
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-slate-950">
+                    Register your health facility
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Provide the facility details and upload a valid licence or
+                    registration document. PDF, JPG and PNG files up to 5 MB are
+                    accepted.
+                </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+                <AuthField
+                    label="Facility name"
+                    value={facilityName}
+                    onChange={setFacilityName}
+                />
+                <label className="grid gap-2 text-sm font-bold text-slate-700">
+                    Facility type
+                    <select
+                        className="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-[#1AA6A6] focus:bg-white focus:ring-4 focus:ring-teal-100"
+                        value={facilityType}
+                        onChange={(event) =>
+                            setFacilityType(event.target.value)
+                        }
+                    >
+                        <option value="pharmacy">Pharmacy</option>
+                        <option value="hospital">Hospital</option>
+                        <option value="clinic">Clinic</option>
+                        <option value="laboratory">Laboratory</option>
+                        <option value="imaging">Imaging centre</option>
+                        <option value="dental">Dental clinic</option>
+                        <option value="physiotherapy">Physiotherapy</option>
+                    </select>
+                </label>
+                <AuthField
+                    label="Licence number"
+                    value={licenseNumber}
+                    onChange={setLicenseNumber}
+                />
+                <AuthField
+                    label="Province"
+                    value={province}
+                    onChange={setProvince}
+                />
+                <AuthField
+                    label="District"
+                    value={district}
+                    onChange={setDistrict}
+                />
+                <AuthField
+                    label="Physical address"
+                    value={address}
+                    onChange={setAddress}
+                />
+                <AuthField
+                    label="Facility phone"
+                    value={phone}
+                    onChange={setPhone}
+                    autoComplete="tel"
+                />
+                <AuthField
+                    label="Facility email"
+                    value={email}
+                    onChange={setEmail}
+                    autoComplete="email"
+                />
+            </div>
+            <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
+                <label className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                    <input
+                        checked={open24Hours}
+                        className="h-5 w-5 accent-[#1AA6A6]"
+                        onChange={(event) =>
+                            setOpen24Hours(event.target.checked)
+                        }
+                        type="checkbox"
+                    />
+                    Open 24 hours
+                </label>
+                <label className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                    <input
+                        checked={offersDelivery}
+                        className="h-5 w-5 accent-[#1AA6A6]"
+                        onChange={(event) =>
+                            setOffersDelivery(event.target.checked)
+                        }
+                        type="checkbox"
+                    />
+                    Offers delivery
+                </label>
+            </div>
+            <label className="mt-4 grid gap-2 text-sm font-bold text-slate-700">
+                Licence or registration document
+                <input
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="rounded-2xl border border-dashed border-[#1AA6A6] bg-[#EAF8F8] p-4 text-sm"
+                    onChange={(event) =>
+                        setDocument(event.target.files?.[0] ?? null)
+                    }
+                    required
+                    type="file"
+                />
+            </label>
+            {errorMessage && (
+                <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">
+                    {errorMessage}
+                </p>
+            )}
+            <button
+                className="mt-5 w-full rounded-2xl bg-[#FF8A00] px-5 py-3 font-black text-white disabled:cursor-wait disabled:opacity-60"
+                disabled={submitting}
+                type="submit"
+            >
+                {submitting
+                    ? "Submitting securely…"
+                    : "Submit for verification"}
+            </button>
+        </form>
     );
 }
 
