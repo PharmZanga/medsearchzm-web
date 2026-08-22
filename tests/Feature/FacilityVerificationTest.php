@@ -51,6 +51,15 @@ class FacilityVerificationTest extends TestCase
 
         $this->assertTrue($facility->fresh()->is_active);
         $this->assertSame('approved', $facility->fresh()->verification_status);
+
+        $this->getJson('/api/v1/facilities')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $facility->id)
+            ->assertJsonPath('data.0.verification_status', 'approved');
+
+        $this->getJson("/api/v1/facilities/{$facility->id}")
+            ->assertOk()
+            ->assertJsonPath('id', $facility->id);
     }
 
     public function test_patient_cannot_access_the_admin_verification_queue(): void
