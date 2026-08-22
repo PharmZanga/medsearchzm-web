@@ -22,12 +22,23 @@ import {
     Users,
     Video,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../css/app.css";
 
 type AccountType = "patient" | "health_worker" | "facility";
+type AuthMode = "register" | "login";
+type AuthUser = {
+    id: number;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    account_type: string;
+    status: string;
+    roles: string[];
+    permissions: string[];
+};
 type ModuleId =
     | "home"
     | "pharmacy"
@@ -920,6 +931,10 @@ function App() {
                         setAccountType(type);
                         setLoggedInAccount(type);
                         setToast(`Logged in as ${type.replace("_", " ")}`);
+                    }}
+                    onLogout={() => {
+                        setLoggedInAccount(null);
+                        setToast("Logged out");
                     }}
                     onNavigate={navigate}
                     onOpenAction={openAction}
@@ -2675,6 +2690,7 @@ function Accounts({
     loggedInAccount,
     onAccountTypeChange,
     onLogin,
+    onLogout,
     onNavigate,
     onOpenAction,
 }: {
@@ -2682,54 +2698,286 @@ function Accounts({
     loggedInAccount: AccountType | null;
     onAccountTypeChange: (type: AccountType) => void;
     onLogin: (type: AccountType) => void;
+    onLogout: () => void;
     onNavigate: (module: ModuleId) => void;
     onOpenAction: (panel: ActionPanelContent) => void;
 }) {
+    const [mode, setMode] = useState<AuthMode>("register");
+    const [name, setName] = useState("");
+    const [identifier, setIdentifier] = useState("");
+    const [password, setPassword] = useState("");
+    const [passwordConfirmation, setPasswordConfirmation] = useState("");
+    const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [authMessage, setAuthMessage] = useState("");
+    const [authError, setAuthError] = useState("");
     const selected =
         accounts.find((account) => account.id === accountType) ?? accounts[0];
     const Icon = selected.icon;
 
+    async function submitAuth(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setSubmitting(true);
+        setAuthMessage("");
+        setAuthError("");
+
+        const endpoint = mode === "register" ? "register" : "login";
+        const payload =
+            mode === "register"
+                ? {
+                      name,
+                      email: identifier,
+                      password,
+                      password_confirmation: passwordConfirmation,
+                      account_type: accountType,
+                  }
+                : {
+                      identifier,
+                      password,
+                      device_name: "MedSearch Africa Web",
+                  };
+
+        try {
+            const response = await fetch(`/api/v1/auth/${endpoint}`, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                const validationMessage = Object.values(
+                    result.errors ?? {},
+                ).flat()[0];
+                throw new Error(
+                    typeof validationMessage === "string"
+                        ? validationMessage
+                        : result.message || "Account request failed.",
+                );
+            }
+
+            sessionStorage.setItem("medsearch_token", result.token);
+            setAuthUser(result.user);
+            setAuthMessage(result.message);
+
+            if (
+                result.user.account_type === "patient" ||
+                result.user.account_type === "health_worker" ||
+                result.user.account_type === "facility"
+            ) {
+                onAccountTypeChange(result.user.account_type);
+                onLogin(result.user.account_type);
+            }
+        } catch (error) {
+            setAuthError(
+                error instanceof Error
+                    ? error.message
+                    : "The MedSearch API could not be reached.",
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    async function logout() {
+        const token = sessionStorage.getItem("medsearch_token");
+        try {
+            if (token) {
+                await fetch("/api/v1/auth/logout", {
+                    method: "POST",
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+            }
+        } finally {
+            sessionStorage.removeItem("medsearch_token");
+            setAuthUser(null);
+            setAuthMessage("Logged out successfully.");
+            onLogout();
+        }
+    }
+
     return (
         <section className="space-y-5">
             <SectionHeader
-                title="Login and account types"
-                subtitle="Click an account type to demo-login and see what that role can do."
+                title="Secure account access"
+                subtitle="Register or sign in using the live MedSearch Africa account API."
             />
-            <div className="grid gap-4 md:grid-cols-3">
-                {accounts.map((account) => (
-                    <button
-                        className={`rounded-3xl border p-5 text-left shadow-sm ${account.id === accountType ? "border-[#1AA6A6] bg-[#EAF8F8]" : "border-teal-100 bg-white"}`}
-                        key={account.id}
-                        onClick={() => {
-                            onAccountTypeChange(account.id);
-                            onLogin(account.id);
-                            onOpenAction({
-                                title: `${account.title} login preview`,
-                                subtitle: account.summary,
-                                items: [
-                                    `Registration fields: ${account.fields.join(", ")}`,
-                                    `Allowed actions: ${account.permissions.join(", ")}`,
-                                    account.id === "patient"
-                                        ? "Public users can browse, book, buy OTC medicines and comment."
-                                        : "Verification is required before provider-facing features go live.",
-                                ],
-                                primaryAction: `Continue as ${account.title}`,
-                            });
-                        }}
-                    >
-                        <account.icon className="text-[#087D7D]" size={28} />
-                        <strong className="mt-4 block text-slate-950">
-                            {account.title}
-                        </strong>
-                        <p className="mt-2 text-sm text-slate-600">
-                            {account.summary}
-                        </p>
-                        <span className="mt-4 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-[#087D7D]">
-                            Demo login
+            {!authUser && (
+                <div className="grid grid-cols-2 rounded-2xl bg-[#EAF8F8] p-1">
+                    {(["register", "login"] as AuthMode[]).map((value) => (
+                        <button
+                            className={`rounded-xl px-4 py-3 text-sm font-black ${mode === value ? "bg-white text-[#087D7D] shadow-sm" : "text-slate-500"}`}
+                            key={value}
+                            onClick={() => {
+                                setMode(value);
+                                setAuthError("");
+                                setAuthMessage("");
+                            }}
+                        >
+                            {value === "register"
+                                ? "Create account"
+                                : "Sign in"}
+                        </button>
+                    ))}
+                </div>
+            )}
+            {mode === "register" && !authUser && (
+                <div className="grid gap-3 md:grid-cols-3">
+                    {accounts.map((account) => (
+                        <button
+                            className={`rounded-3xl border p-5 text-left shadow-sm ${account.id === accountType ? "border-[#1AA6A6] bg-[#EAF8F8]" : "border-teal-100 bg-white"}`}
+                            key={account.id}
+                            onClick={() => onAccountTypeChange(account.id)}
+                            type="button"
+                        >
+                            <account.icon
+                                className="text-[#087D7D]"
+                                size={28}
+                            />
+                            <strong className="mt-4 block text-slate-950">
+                                {account.title}
+                            </strong>
+                            <p className="mt-2 text-sm text-slate-600">
+                                {account.summary}
+                            </p>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {!authUser ? (
+                <form
+                    className="rounded-3xl border border-teal-100 bg-white p-5 shadow-sm md:p-7"
+                    onSubmit={submitAuth}
+                >
+                    <div className="mb-5 flex items-center gap-3">
+                        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#EAF8F8] text-[#087D7D]">
+                            <Icon size={24} />
                         </span>
+                        <div>
+                            <h3 className="text-xl font-black text-slate-950">
+                                {mode === "register"
+                                    ? `Register as ${selected.title}`
+                                    : "Welcome back"}
+                            </h3>
+                            <p className="text-sm text-slate-500">
+                                {mode === "register"
+                                    ? "Provider accounts require verification before public activation."
+                                    : "Use the email or phone number registered to your account."}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="grid gap-4">
+                        {mode === "register" && (
+                            <AuthField
+                                label="Full name"
+                                value={name}
+                                onChange={setName}
+                                autoComplete="name"
+                            />
+                        )}
+                        <AuthField
+                            label={
+                                mode === "register"
+                                    ? "Email address"
+                                    : "Email or phone number"
+                            }
+                            value={identifier}
+                            onChange={setIdentifier}
+                            autoComplete="email"
+                        />
+                        <AuthField
+                            label="Password"
+                            value={password}
+                            onChange={setPassword}
+                            type="password"
+                            autoComplete={
+                                mode === "register"
+                                    ? "new-password"
+                                    : "current-password"
+                            }
+                        />
+                        {mode === "register" && (
+                            <AuthField
+                                label="Confirm password"
+                                value={passwordConfirmation}
+                                onChange={setPasswordConfirmation}
+                                type="password"
+                                autoComplete="new-password"
+                            />
+                        )}
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                        Passwords must contain at least 10 characters, including
+                        letters and numbers.
+                    </p>
+                    {authError && (
+                        <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">
+                            {authError}
+                        </p>
+                    )}
+                    {authMessage && (
+                        <p className="mt-4 rounded-2xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700">
+                            {authMessage}
+                        </p>
+                    )}
+                    <button
+                        className="mt-5 w-full rounded-2xl bg-[#FF8A00] px-5 py-3 font-black text-white disabled:cursor-wait disabled:opacity-60"
+                        disabled={submitting}
+                        type="submit"
+                    >
+                        {submitting
+                            ? "Please wait…"
+                            : mode === "register"
+                              ? "Create secure account"
+                              : "Sign in securely"}
                     </button>
-                ))}
-            </div>
+                </form>
+            ) : (
+                <article className="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-black uppercase tracking-wide text-emerald-700">
+                                Authenticated account
+                            </p>
+                            <h3 className="mt-1 text-2xl font-black text-slate-950">
+                                {authUser.name}
+                            </h3>
+                            <p className="mt-1 text-sm text-slate-600">
+                                {authUser.email || authUser.phone} · {authUser.status}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {authUser.roles.map((role) => (
+                                    <span
+                                        className="rounded-full bg-[#EAF8F8] px-3 py-1 text-xs font-black text-[#087D7D]"
+                                        key={role}
+                                    >
+                                        {role.replace("_", " ")}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                        <button
+                            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-black text-slate-700"
+                            onClick={logout}
+                            type="button"
+                        >
+                            Sign out
+                        </button>
+                    </div>
+                    {authUser.account_type === "facility" && (
+                        <p className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                            Next: submit the facility licence and supporting
+                            documents for administrator verification.
+                        </p>
+                    )}
+                </article>
+            )}
             <article className="rounded-3xl border border-teal-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-3">
                     <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#EAF8F8] text-[#087D7D]">
@@ -2755,24 +3003,6 @@ function Accounts({
                         items={selected.permissions}
                     />
                 </div>
-                <button
-                    className="mt-5 rounded-full bg-[#FF8A00] px-5 py-3 font-bold text-white"
-                    onClick={() => {
-                        onLogin(selected.id);
-                        onOpenAction({
-                            title: `${selected.title} session opened`,
-                            subtitle: "Demo account workspace is now active.",
-                            items: [
-                                "Role-based menu is loaded",
-                                "Permissions are applied for this account type",
-                                "Next clicks open the relevant module or role window.",
-                            ],
-                            primaryAction: "Open workspace",
-                        });
-                    }}
-                >
-                    Continue as {selected.title}
-                </button>
             </article>
             {loggedInAccount && (
                 <RoleWorkspace
@@ -2782,6 +3012,34 @@ function Accounts({
                 />
             )}
         </section>
+    );
+}
+
+function AuthField({
+    label,
+    value,
+    onChange,
+    type = "text",
+    autoComplete,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    type?: "text" | "password";
+    autoComplete?: string;
+}) {
+    return (
+        <label className="grid gap-2 text-sm font-bold text-slate-700">
+            {label}
+            <input
+                className="min-h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none transition focus:border-[#1AA6A6] focus:bg-white focus:ring-4 focus:ring-teal-100"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                type={type}
+                autoComplete={autoComplete}
+                required
+            />
+        </label>
     );
 }
 
