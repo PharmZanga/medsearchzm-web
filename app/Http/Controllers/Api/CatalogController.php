@@ -88,7 +88,7 @@ class CatalogController extends Controller
 
     public function facility(Facility $facility): JsonResponse
     {
-        abort_unless($facility->is_active && $facility->verification_status === 'verified', 404);
+        abort_unless($facility->is_active && $facility->verification_status === 'approved', 404);
 
         return response()->json($facility->load(['services', 'medicines']));
     }
